@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>RoadWatch – Road Transparency & Accountability Platform</title>
+  <meta name="description" content="RoadWatch: A civic tech platform for road transparency. Check road conditions, report potholes, track budgets, and hold authorities accountable."/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+  <link rel="stylesheet" href="css/main.css"/>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════ HEADER ═══════ -->
+<header class="app-header">
+  <a class="logo" href="#" id="logo-link">
+    <div class="logo-icon">🛣️</div>
+    <span>RoadWatch</span>
+  </a>
+
+  <nav class="nav-tabs" id="nav-tabs">
+    <button class="nav-tab active" data-tab="chat" id="tab-chat">
+      <i class="fa-solid fa-comments"></i> Chat
+    </button>
+    <button class="nav-tab" data-tab="map" id="tab-map">
+      <i class="fa-solid fa-map-location-dot"></i> Map
+    </button>
+    <button class="nav-tab" data-tab="roads" id="tab-roads">
+      <i class="fa-solid fa-road"></i> Roads
+    </button>
+    <button class="nav-tab" data-tab="analytics" id="tab-analytics">
+      <i class="fa-solid fa-chart-bar"></i> Analytics
+    </button>
+  </nav>
+
+  <div class="header-right">
+    <select class="country-selector" id="country-selector">
+      <option value="india">🇮🇳 India</option>
+      <option value="kenya">🇰🇪 Kenya</option>
+      <option value="usa">🇺🇸 USA</option>
+    </select>
+    <div class="location-badge" id="location-badge">
+      <div class="location-dot"></div>
+      <span id="location-text">Detecting location…</span>
+    </div>
+    <button class="voice-btn" id="voice-btn" title="Voice Input">
+      <i class="fa-solid fa-microphone"></i>
+    </button>
+  </div>
+</header>
+
+<!-- ═══════════════════════════════════════════ MAIN ═════════ -->
+<main class="app-main">
+
+  <!-- ── CHAT PANEL ── -->
+  <section class="chat-panel">
+    <div class="chat-header">
+      <div class="chat-header-avatar">🤖</div>
+      <div class="chat-header-info">
+        <h3>RoadBot</h3>
+        <span>● Online – Civic AI Assistant</span>
+      </div>
+    </div>
+
+    <div class="chat-messages" id="chat-messages">
+      <!-- Messages injected by JS -->
+    </div>
+
+    <div class="quick-actions" id="quick-actions">
+      <button class="quick-btn" data-msg="Find my nearest road">📍 Find My Road</button>
+      <button class="quick-btn" data-msg="Report a pothole">🚧 Report Pothole</button>
+      <button class="quick-btn" data-msg="Show road budget">💰 Budget Info</button>
+      <button class="quick-btn" data-msg="What is the road quality score?">⭐ Quality Score</button>
+      <button class="quick-btn" data-msg="Help">❓ Help</button>
+    </div>
+
+    <div class="chat-input-area">
+      <div class="chat-input-wrap">
+        <textarea class="chat-input" id="chat-input"
+          placeholder="Ask about roads, potholes, budgets…"
+          rows="1"></textarea>
+        <button class="send-btn" id="send-btn" title="Send">
+          <i class="fa-solid fa-paper-plane"></i>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── CONTENT PANEL ── -->
+  <section class="content-panel">
+
+    <!-- Stats bar -->
+    <div class="stats-row" id="stats-row">
+      <div class="stat-item">
+        <div class="stat-value stat-blue" id="stat-total">20</div>
+        <div class="stat-label">Roads Tracked</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value stat-red" id="stat-complaints">0</div>
+        <div class="stat-label">Reports Filed</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value stat-green" id="stat-good">0</div>
+        <div class="stat-label">Good Roads</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value stat-cyan" id="stat-budget">₹0Cr</div>
+        <div class="stat-label">Total Sanctioned</div>
+      </div>
+    </div>
+
+    <!-- Tab bar -->
+    <div class="content-tabs">
+      <button class="content-tab active" data-view="map-view" id="ctab-map">
+        <i class="fa-solid fa-map"></i> Map
+      </button>
+      <button class="content-tab" data-view="analytics-view" id="ctab-analytics">
+        <i class="fa-solid fa-chart-line"></i> Analytics
+      </button>
+      <button class="content-tab" data-view="roads-view" id="ctab-roads">
+        <i class="fa-solid fa-list"></i> All Roads
+      </button>
+    </div>
+
+    <!-- MAP VIEW -->
+    <div class="content-view active" id="map-view">
+      <div id="map"></div>
+    </div>
+
+    <!-- ANALYTICS VIEW -->
+    <div class="content-view" id="analytics-view">
+      <div class="analytics-view" id="analytics-grid">
+        <div class="analytics-card full-width">
+          <h3><i class="fa-solid fa-chart-bar"></i> Budget: Sanctioned vs Spent (Top 8 Roads)</h3>
+          <canvas id="budget-chart" height="120"></canvas>
+        </div>
+        <div class="analytics-card">
+          <h3><i class="fa-solid fa-pie-chart"></i> Road Type Distribution</h3>
+          <canvas id="type-chart" height="160"></canvas>
+        </div>
+        <div class="analytics-card">
+          <h3><i class="fa-solid fa-star"></i> Quality Distribution</h3>
+          <canvas id="quality-chart" height="160"></canvas>
+        </div>
+        <div class="analytics-card full-width">
+          <h3><i class="fa-solid fa-triangle-exclamation"></i> Top Reported Roads (Potholes)</h3>
+          <canvas id="pothole-chart" height="90"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- ROADS VIEW -->
+    <div class="content-view" id="roads-view">
+      <div style="padding:12px 16px; border-bottom:1px solid var(--border); display:flex; gap:10px; align-items:center;">
+        <input class="form-input" style="max-width:300px;" id="road-search" placeholder="🔍  Search roads…"/>
+        <select class="form-select" style="max-width:160px;" id="road-filter-type">
+          <option value="">All Types</option>
+          <option value="NH">National Highway</option>
+          <option value="SH">State Highway</option>
+          <option value="MDR">MDR</option>
+          <option value="City">City Road</option>
+        </select>
+      </div>
+      <div class="roads-view" id="roads-list"></div>
+    </div>
+
+  </section>
+</main>
+
+<!-- ═══════════════════════════════════════════ STATUS BAR ═══ -->
+<div class="status-bar" id="status-bar">
+  <div class="online-badge">
+    <div class="online-dot online" id="online-dot"></div>
+    <span id="online-text">Online</span>
+  </div>
+  <span>|</span>
+  <span id="db-status">IndexedDB: Loading…</span>
+  <span>|</span>
+  <span id="sync-status">Last synced: just now</span>
+</div>
+
+<!-- ═══════════════════════════════════════════ COMPLAINT MODAL ══ -->
+<div class="modal-overlay" id="complaint-modal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h2>🚧 File a Complaint</h2>
+      <button class="modal-close" id="complaint-modal-close">&times;</button>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Your Name (optional)</label>
+      <input class="form-input" id="complaint-name" placeholder="Citizen name"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Road</label>
+      <input class="form-input" id="complaint-road" readonly/>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Issue Type</label>
+      <select class="form-select" id="complaint-type">
+        <option>Pothole</option>
+        <option>Road Damage / Cracks</option>
+        <option>Waterlogging</option>
+        <option>Missing Signage</option>
+        <option>Encroachment</option>
+        <option>Other</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Description</label>
+      <textarea class="form-textarea" id="complaint-desc" placeholder="Describe the issue in detail…"></textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Location Description</label>
+      <input class="form-input" id="complaint-location" placeholder="e.g., Near KM-45 marker, before flyover"/>
+    </div>
+    <div style="display:flex; gap:10px; margin-top:4px;">
+      <button class="btn btn-primary" id="complaint-preview-btn">
+        <i class="fa-solid fa-eye"></i> Preview Letter
+      </button>
+      <button class="btn btn-green" id="complaint-submit-btn">
+        <i class="fa-solid fa-paper-plane"></i> Submit Complaint
+      </button>
+    </div>
+    <div id="letter-preview-wrap" style="display:none; margin-top:16px;">
+      <div class="form-label" style="margin-bottom:8px;">📄 Official Complaint Letter Preview</div>
+      <div class="letter-preview" id="letter-content"></div>
+      <button class="btn btn-secondary" style="margin-top:10px;" id="download-letter-btn">
+        <i class="fa-solid fa-download"></i> Download as Text
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════ SCRIPTS ══════ -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="js/data.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
