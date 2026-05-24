@@ -6,6 +6,8 @@
   <title>RoadWatch – Road Transparency & Accountability Platform</title>
   <meta name="description" content="RoadWatch: A civic tech platform for road transparency. Check road conditions, report potholes, track budgets, and hold authorities accountable."/>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"/>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
   <link rel="stylesheet" href="css/main.css"/>
 </head>
@@ -35,9 +37,11 @@
 
   <div class="header-right">
     <select class="country-selector" id="country-selector">
-      <option value="india">🇮🇳 India</option>
-      <option value="kenya">🇰🇪 Kenya</option>
+      <option value="india">🇮🇳 India (700+ NH)</option>
       <option value="usa">🇺🇸 USA</option>
+      <option value="kenya">🇰🇪 Kenya</option>
+      <option value="uk">🇬🇧 UK</option>
+      <option value="australia">🇦🇺 Australia</option>
     </select>
     <div class="location-badge" id="location-badge">
       <div class="location-dot"></div>
@@ -92,7 +96,7 @@
     <!-- Stats bar -->
     <div class="stats-row" id="stats-row">
       <div class="stat-item">
-        <div class="stat-value stat-blue" id="stat-total">20</div>
+        <div class="stat-value stat-blue" id="stat-total">—</div>
         <div class="stat-label">Roads Tracked</div>
       </div>
       <div class="stat-item">
@@ -105,7 +109,7 @@
       </div>
       <div class="stat-item">
         <div class="stat-value stat-cyan" id="stat-budget">₹0Cr</div>
-        <div class="stat-label">Total Sanctioned</div>
+        <div class="stat-label">Avg Sanctioned / Road</div>
       </div>
     </div>
 
@@ -151,8 +155,8 @@
 
     <!-- ROADS VIEW -->
     <div class="content-view" id="roads-view">
-      <div style="padding:12px 16px; border-bottom:1px solid var(--border); display:flex; gap:10px; align-items:center;">
-        <input class="form-input" style="max-width:300px;" id="road-search" placeholder="🔍  Search roads…"/>
+      <div style="padding:12px 16px; border-bottom:1px solid var(--border); display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+        <input class="form-input" style="max-width:320px; flex:1;" id="road-search" placeholder="🔍 Search by NH number, name, city, state…"/>
         <select class="form-select" style="max-width:160px;" id="road-filter-type">
           <option value="">All Types</option>
           <option value="NH">National Highway</option>
@@ -160,8 +164,10 @@
           <option value="MDR">MDR</option>
           <option value="City">City Road</option>
         </select>
+        <span class="roads-count-badge" id="roads-count-badge">—</span>
       </div>
       <div class="roads-view" id="roads-list"></div>
+      <div class="roads-list-footer" id="roads-list-footer"></div>
     </div>
 
   </section>
@@ -233,7 +239,9 @@
 
 <!-- ═══════════════════════════════════════════ SCRIPTS ══════ -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="js/roads-data.js"></script>
 <script src="js/data.js"></script>
 <script src="js/app.js"></script>
 </body>

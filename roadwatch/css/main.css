@@ -337,7 +337,19 @@ body {
 .quality-ring-info p { font-size: 0.75rem; color: var(--text-muted); line-height: 1.5; }
 
 /* Roads list */
-.roads-view { overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+.roads-count-badge {
+  font-size: 0.75rem; color: var(--text-secondary); padding: 6px 12px;
+  background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; white-space: nowrap;
+}
+.roads-empty { padding: 24px; text-align: center; color: var(--text-muted); font-size: 0.85rem; }
+.roads-list-footer {
+  display: flex; align-items: center; justify-content: center; gap: 14px;
+  padding: 10px 16px; border-top: 1px solid var(--border);
+  font-size: 0.78rem; color: var(--text-secondary); flex-shrink: 0;
+}
+.roads-list-footer .btn-sm { padding: 5px 12px; font-size: 0.75rem; }
+.roads-view { overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; flex: 1; min-height: 0; }
+#roads-view { display: flex; flex-direction: column; min-height: 0; }
 .road-list-item {
   background: var(--bg-card); border: 1px solid var(--border);
   border-radius: var(--radius); padding: 12px 14px;

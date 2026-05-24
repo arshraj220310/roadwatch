@@ -13,13 +13,96 @@ const App = {
   charts: {},
   mapInstance: null,
   mapMarkers: [],
+  markerCluster: null,
   offlineDB: null,
   voiceActive: false,
-  chatState: 'IDLE', // IDLE | AWAIT_COMPLAINT_LOCATION | AWAIT_COMPLAINT_CONFIRM
+  chatState: 'IDLE',
   chatContext: {},
+  roadById: new Map(),
+  roadsPage: 0,
+  roadsPageSize: 80,
+  roadsFilterKey: '',
+  roadsTypeFilter: '',
+  searchDebounce: null,
+
+  getRoads() {
+    return (typeof ROADS !== 'undefined' && ROADS[this.country]) ? ROADS[this.country] : [];
+  },
+
+  buildRoadIndex() {
+    this.roadById.clear();
+    const roads = this.getRoads();
+    roads.forEach(r => this.roadById.set(r.road_id, r));
+  },
+
+  findRoadById(id) {
+    return this.roadById.get(id) || this.getRoads().find(r => r.road_id === id);
+  },
+
+  findRoadByQuery(text) {
+    const roads = this.getRoads();
+    const exact = roads.filter(r => this.roadMatchesQuery(r, text));
+    if (!exact.length) return null;
+    const t = this.normalizeSearchQuery(text);
+    const nhMatch = t.match(/(?:^|\s)nh\s*(\d+[a-z]*)/) || t.match(/^(\d+[a-z]*)$/);
+    if (nhMatch) {
+      const num = nhMatch[1] || nhMatch[0];
+      const primary = exact.find(r => {
+        const nh = (r.nh_number || '').toLowerCase().replace(/\s+/g, ' ');
+        return nh === 'nh ' + num || nh.startsWith('nh ' + num + ' ');
+      });
+      if (primary) return primary;
+    }
+    return exact[0];
+  },
+
+  normalizeSearchQuery(q) {
+    return String(q || '').toLowerCase().replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  },
+
+  roadMatchesQuery(road, rawQuery) {
+    const q = this.normalizeSearchQuery(rawQuery);
+    if (!q) return true;
+
+    const hay = [road.road_id, road.road_name, road.nh_number, road.city, road.state, road.description]
+      .filter(Boolean).join(' ').toLowerCase().replace(/[^\w\s]/g, ' ');
+
+    const nhInQuery = q.match(/(?:^|\s)nh\s*(\d+[a-z]*)/) || q.match(/^(\d+[a-z]*)$/);
+    if (nhInQuery) {
+      const num = nhInQuery[1] || nhInQuery[0];
+      const nhTag = 'nh ' + num;
+      const roadNh = (road.nh_number || '').toLowerCase().replace(/\s+/g, ' ');
+      if (roadNh === nhTag || roadNh.startsWith(nhTag + ' ') || roadNh.includes(nhTag)) return true;
+      if (hay.includes(nhTag) || hay.includes('nh ' + num)) return true;
+    }
+
+    const tokens = q.split(' ').filter(t => t.length > 0);
+    if (!tokens.length) return true;
+    return tokens.every(t => hay.includes(t));
+  },
+
+  getFilteredRoads(textFilter, typeFilter) {
+    const type = typeFilter || '';
+    return this.getRoads().filter(r => {
+      if (type && r.road_type !== type) return false;
+      return this.roadMatchesQuery(r, textFilter);
+    });
+  },
+
+  countryCenter() {
+    const centers = {
+      india: { center: [20.5937, 78.9629], zoom: 5 },
+      kenya: { center: [-0.5, 37.0], zoom: 6 },
+      usa: { center: [39.5, -98.5], zoom: 4 },
+      uk: { center: [54.5, -2.5], zoom: 6 },
+      australia: { center: [-25.5, 133.0], zoom: 4 },
+    };
+    return centers[this.country] || centers.india;
+  },
 
   /* ─── INIT ─── */
   init() {
+    this.buildRoadIndex();
     this.initOfflineDB();
     this.initMap();
     this.initChat();
@@ -40,7 +123,7 @@ const App = {
     navigator.geolocation.getCurrentPosition(pos => {
       this.userLat = pos.coords.latitude;
       this.userLng = pos.coords.longitude;
-      const roads = ROADS[this.country];
+      const roads = this.getRoads();
       const nearest = this.findNearest(this.userLat, this.userLng, roads);
       document.getElementById('location-text').textContent =
         nearest ? nearest.city + ', ' + nearest.state : 'Location found';
@@ -73,11 +156,12 @@ const App = {
   /* ─── QUALITY SCORE ─── */
   calcQuality(road) {
     const days = Math.floor((Date.now() - new Date(road.last_relay_date)) / 86400000);
-    const agePenalty = Math.min(days / 10, 60);
-    const potholePenalty = road.pothole_reports * 5;
-    const remaining = road.amount_sanctioned - road.amount_spent;
-    const budgetBonus = (remaining / road.amount_sanctioned) * 10;
-    const score = Math.max(0, Math.min(100, Math.round(100 - agePenalty - potholePenalty + budgetBonus)));
+    const agePenalty = Math.min(days / 20, 30);
+    const potholePenalty = Math.min((road.pothole_reports || 0) * 4, 24);
+    const spentRatio = road.amount_spent / Math.max(road.amount_sanctioned, 1);
+    const utilPenalty = spentRatio > 0.98 ? 8 : spentRatio < 0.5 ? 5 : 0;
+    const utilBonus = spentRatio >= 0.65 && spentRatio <= 0.92 ? 8 : 0;
+    const score = Math.max(0, Math.min(100, Math.round(100 - agePenalty - potholePenalty - utilPenalty + utilBonus)));
     return score;
   },
 
@@ -89,10 +173,15 @@ const App = {
 
   /* ─── FORMAT CURRENCY ─── */
   formatAmount(amount, country) {
-    if (country === 'usa') return '$' + (amount / 1000000).toFixed(2) + 'M';
-    if (country === 'kenya') return 'KES ' + (amount / 1000000000).toFixed(2) + 'B';
+    const c = country || this.country;
+    if (c === 'usa') return '$' + (amount / 1000000).toFixed(2) + 'M';
+    if (c === 'kenya') return 'KES ' + (amount / 1000000000).toFixed(2) + 'B';
+    if (c === 'uk') return '£' + (amount / 1000000).toFixed(2) + 'M';
+    if (c === 'australia') return 'A$' + (amount / 1000000).toFixed(2) + 'M';
     const cr = amount / 10000000;
-    return '₹' + (cr >= 1 ? cr.toFixed(2) + ' Cr' : (amount / 100000).toFixed(2) + ' L');
+    if (cr >= 1000) return '₹' + (cr / 1000).toFixed(2) + 'k Cr';
+    if (cr >= 1) return '₹' + cr.toFixed(2) + ' Cr';
+    return '₹' + (amount / 100000).toFixed(2) + ' L';
   },
 
   /* ─── MAP ─── */
@@ -105,38 +194,58 @@ const App = {
   },
 
   renderMapMarkers() {
-    this.mapMarkers.forEach(m => this.mapInstance.removeLayer(m));
+    if (this.markerCluster) {
+      this.mapInstance.removeLayer(this.markerCluster);
+      this.markerCluster = null;
+    }
     this.mapMarkers = [];
-    const roads = ROADS[this.country];
+
+    const roads = this.getRoads();
+    const cluster = L.markerClusterGroup({
+      maxClusterRadius: 55,
+      spiderfyOnMaxZoom: true,
+      showCoverageOnHover: false,
+      disableClusteringAtZoom: 12,
+      chunkedLoading: true,
+      chunkInterval: 50,
+      chunkDelay: 20,
+    });
+
     roads.forEach(road => {
       const score = this.calcQuality(road);
       const q = this.qualityLabel(score);
       const icon = L.divIcon({
         className: '',
-        html: `<div style="width:18px;height:18px;border-radius:50%;background:${q.color};border:3px solid rgba(255,255,255,0.8);box-shadow:0 0 12px ${q.color};cursor:pointer;"></div>`,
-        iconSize: [18, 18], iconAnchor: [9, 9]
+        html: `<div style="width:14px;height:14px;border-radius:50%;background:${q.color};border:2px solid rgba(255,255,255,0.85);box-shadow:0 0 8px ${q.color};cursor:pointer;"></div>`,
+        iconSize: [14, 14], iconAnchor: [7, 7]
       });
+      const safeId = road.road_id.replace(/'/g, "\\'");
       const marker = L.marker([road.location.lat, road.location.lng], { icon })
-        .addTo(this.mapInstance)
         .bindPopup(`
-          <div class="map-popup-title">${road.road_name}</div>
-          <div class="map-popup-row">📍 ${road.city}, ${road.state}</div>
-          <div class="map-popup-row">🏗️ Type: ${road.road_type}</div>
-          <div class="map-popup-row">🕒 Last Relay: ${road.last_relay_date}</div>
-          <div class="map-popup-row">⭐ Quality: ${q.label} (${score}/100)</div>
-          <div class="map-popup-row">🚧 Potholes: ${road.pothole_reports} reports</div>
-          <button class="btn btn-primary map-popup-btn" onclick="App.chatAboutRoad('${road.road_id}')">💬 Ask RoadBot</button>
+          <div class="map-popup-title">${this.escapeHtml(road.road_name)}</div>
+          <div class="map-popup-row">📍 ${this.escapeHtml(road.city)}, ${this.escapeHtml(road.state)}</div>
+          <div class="map-popup-row">🏗️ ${road.road_type}${road.road_length_km ? ' · ' + road.road_length_km + ' km' : ''}</div>
+          <div class="map-popup-row">⭐ ${q.label} (${score}/100)</div>
+          <div class="map-popup-row">🚧 ${road.pothole_reports} reports</div>
+          <button class="btn btn-primary map-popup-btn" onclick="App.chatAboutRoad('${safeId}')">💬 Details</button>
         `);
+      cluster.addLayer(marker);
       this.mapMarkers.push(marker);
     });
 
-    const center = this.country === 'kenya' ? [-0.5, 37.0] : this.country === 'usa' ? [39.5, -98.5] : [20.5937, 78.9629];
-    const zoom = this.country === 'india' ? 5 : this.country === 'kenya' ? 6 : 4;
+    this.markerCluster = cluster;
+    this.mapInstance.addLayer(cluster);
+
+    const { center, zoom } = this.countryCenter();
     this.mapInstance.setView(center, zoom);
   },
 
+  escapeHtml(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+  },
+
   chatAboutRoad(roadId) {
-    const road = ROADS[this.country].find(r => r.road_id === roadId);
+    const road = this.findRoadById(roadId);
     if (!road) return;
     document.getElementById('tab-chat').click();
     this.currentRoad = road;
@@ -146,46 +255,92 @@ const App = {
 
   /* ─── STATS ─── */
   updateStats() {
-    const roads = ROADS[this.country];
+    const roads = this.getRoads();
     const good = roads.filter(r => this.calcQuality(r) >= 75).length;
     const total = roads.reduce((s, r) => s + r.amount_sanctioned, 0);
-    document.getElementById('stat-total').textContent = roads.length;
-    document.getElementById('stat-good').textContent = good;
+    const avg = roads.length ? total / roads.length : 0;
+    document.getElementById('stat-total').textContent = roads.length.toLocaleString();
+    document.getElementById('stat-good').textContent = good.toLocaleString();
     const complaints = parseInt(localStorage.getItem('rw_complaints') || '0');
     document.getElementById('stat-complaints').textContent = complaints;
-    document.getElementById('stat-budget').textContent = this.formatAmount(total, this.country);
+    document.getElementById('stat-budget').textContent = this.formatAmount(avg, this.country) + ' avg';
+    document.getElementById('stat-budget').title = 'Network total: ' + this.formatAmount(total, this.country);
   },
 
-  /* ─── ROADS LIST ─── */
-  renderRoadsList(filter = '', typeFilter = '') {
-    const roads = ROADS[this.country].filter(r =>
-      r.road_name.toLowerCase().includes(filter.toLowerCase()) &&
-      (typeFilter === '' || r.road_type === typeFilter)
-    );
+  /* ─── ROADS LIST (paginated) ─── */
+  renderRoadsList(filter, typeFilter, resetPage) {
+    if (filter !== undefined) this.roadsFilterKey = filter;
+    if (typeFilter !== undefined) this.roadsTypeFilter = typeFilter;
+    if (resetPage) this.roadsPage = 0;
+
+    const all = this.getFilteredRoads(this.roadsFilterKey, this.roadsTypeFilter);
+    const total = all.length;
+    const totalPages = Math.max(1, Math.ceil(total / this.roadsPageSize));
+    if (this.roadsPage >= totalPages) this.roadsPage = totalPages - 1;
+    if (this.roadsPage < 0) this.roadsPage = 0;
+
+    const start = this.roadsPage * this.roadsPageSize;
+    const page = all.slice(start, start + this.roadsPageSize);
+
+    const badge = document.getElementById('roads-count-badge');
+    if (badge) badge.textContent = total ? `${total.toLocaleString()} roads` : 'No matches';
+
     const list = document.getElementById('roads-list');
-    list.innerHTML = roads.map(road => {
-      const score = this.calcQuality(road);
-      const q = this.qualityLabel(score);
-      return `<div class="road-list-item" onclick="App.chatAboutRoad('${road.road_id}')">
-        <div>
-          <div class="road-list-name">${road.road_name}</div>
-          <div class="road-list-meta">
-            <span>${road.city}</span><span>${road.state}</span>
-            <span>${road.road_length_km} km</span>
-            <span>🚧 ${road.pothole_reports} reports</span>
+    if (!page.length) {
+      list.innerHTML = '<div class="roads-empty">No roads match your search. Try “NH 44” or a city name.</div>';
+    } else {
+      list.innerHTML = page.map(road => {
+        const score = this.calcQuality(road);
+        const q = this.qualityLabel(score);
+        const safeId = road.road_id.replace(/'/g, "\\'");
+        const shortName = road.road_name.length > 72 ? road.road_name.slice(0, 72) + '…' : road.road_name;
+        return `<div class="road-list-item" onclick="App.chatAboutRoad('${safeId}')">
+          <div>
+            <div class="road-list-name">${this.escapeHtml(shortName)}</div>
+            <div class="road-list-meta">
+              <span>${this.escapeHtml(road.city)}</span><span>${this.escapeHtml(road.state)}</span>
+              <span>${road.road_length_km} km</span>
+              <span>🚧 ${road.pothole_reports}</span>
+            </div>
           </div>
-        </div>
-        <div class="road-list-right">
-          <span class="road-type-badge badge-${road.road_type}">${road.road_type}</span><br/>
-          <span class="quality-badge-inline ${q.cls}" style="margin-top:5px;">${q.label} ${score}</span>
-        </div>
-      </div>`;
-    }).join('');
+          <div class="road-list-right">
+            <span class="road-type-badge badge-${road.road_type}">${road.road_type}</span><br/>
+            <span class="quality-badge-inline ${q.cls}" style="margin-top:5px;">${q.label} ${score}</span>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    const footer = document.getElementById('roads-list-footer');
+    if (footer) {
+      footer.innerHTML = total > this.roadsPageSize ? `
+        <button class="btn btn-secondary btn-sm" ${this.roadsPage === 0 ? 'disabled' : ''} onclick="App.roadsPrevPage()">← Prev</button>
+        <span>Page ${this.roadsPage + 1} of ${totalPages} · showing ${start + 1}–${Math.min(start + this.roadsPageSize, total)}</span>
+        <button class="btn btn-secondary btn-sm" ${this.roadsPage >= totalPages - 1 ? 'disabled' : ''} onclick="App.roadsNextPage()">Next →</button>
+      ` : (total ? `<span>Showing all ${total} roads</span>` : '');
+    }
+  },
+
+  roadsPrevPage() {
+    if (this.roadsPage > 0) {
+      this.roadsPage--;
+      this.renderRoadsList();
+      document.getElementById('roads-list')?.scrollTo(0, 0);
+    }
+  },
+
+  roadsNextPage() {
+    const total = this.getFilteredRoads(this.roadsFilterKey, this.roadsTypeFilter).length;
+    if ((this.roadsPage + 1) * this.roadsPageSize < total) {
+      this.roadsPage++;
+      this.renderRoadsList();
+      document.getElementById('roads-list')?.scrollTo(0, 0);
+    }
   },
 
   /* ─── CHARTS ─── */
   initCharts() {
-    const roads = ROADS[this.country];
+    const roads = this.getRoads();
     Chart.defaults.color = '#94a3b8';
     Chart.defaults.font.family = 'Inter';
 
@@ -253,7 +408,8 @@ const App = {
   /* ─── CHAT ─── */
   initChat() {
     setTimeout(() => {
-      this.addBotMessage("👋 Welcome to **RoadWatch** — India's road transparency platform!\n\nI can help you:\n• 📍 Find road details near you\n• 💰 Track road budgets & spending\n• 🚧 Report potholes & file complaints\n• ⭐ Check road quality scores\n\nTry asking: *\"Find my nearest road\"* or *\"Report a pothole\"*");
+      const n = this.getRoads().length;
+      this.addBotMessage(`👋 Welcome to **RoadWatch** — road transparency for India & worldwide!\n\n**${n.toLocaleString()}** highways loaded for ${this.country.charAt(0).toUpperCase() + this.country.slice(1)}.\n\n• 📍 Find nearest road (GPS)\n• 💰 Budget & spending\n• 🚧 Report potholes\n• ⭐ Quality scores\n• 🔍 Try *\"NH 44\"* or *\"Mumbai\"*\n\nAsk: *\"Find my nearest road\"*`);
     }, 500);
   },
 
@@ -268,11 +424,8 @@ const App = {
     if (/help|what can|feature|how|guide/.test(t)) return 'HELP';
     if (/list|all road|show road|roads in/.test(t)) return 'LIST_ROADS';
     if (/offline|cache|sync|saved/.test(t)) return 'OFFLINE';
-    // try to match a road name
-    const roads = ROADS[this.country];
-    for (const r of roads) {
-      if (t.includes(r.road_id.toLowerCase()) || t.includes(r.road_name.toLowerCase().substring(0, 8))) return 'ROAD_NAME:' + r.road_id;
-    }
+    const matched = this.findRoadByQuery(text);
+    if (matched) return 'ROAD_NAME:' + matched.road_id;
     return 'UNKNOWN';
   },
 
@@ -305,7 +458,7 @@ const App = {
   },
 
   dispatchIntent(intent, text) {
-    const roads = ROADS[this.country];
+    const roads = this.getRoads();
 
     if (intent === 'FIND_ROAD') {
       if (this.userLat && this.userLng) {
@@ -358,21 +511,26 @@ const App = {
     }
 
     if (intent === 'HELP') {
-      this.addBotMessage(`🔍 **What I can do:**\n\n📍 **Find My Road** — Detect nearest road using GPS\n💰 **Budget Info** — See sanctioned vs spent funds\n🚧 **Report Pothole** — File & route complaint to officer\n⭐ **Quality Score** — Road health rating (0–100)\n👤 **Officer Info** — Who's responsible for this road\n🌍 **Switch Country** — India, Kenya, USA data\n\nJust type naturally, I'll understand!`);
+      this.addBotMessage(`🔍 **What I can do:**\n\n📍 **Find My Road** — Nearest highway via GPS\n💰 **Budget Info** — Sanctioned vs spent\n🚧 **Report Pothole** — File complaint\n⭐ **Quality Score** — 0–100 rating\n🔎 **Search** — e.g. *NH 44*, *Mumbai*, *I-95*\n🌍 **Countries** — India (700+ NH), USA, Kenya, UK, Australia\n\nJust type naturally!`);
       return;
     }
 
     if (intent === 'LIST_ROADS') {
-      const sample = roads.slice(0, 5);
-      this.addBotMessage(`🛣️ Here are some roads I'm tracking in **${this.country.charAt(0).toUpperCase() + this.country.slice(1)}** (${roads.length} total):`);
+      const q = text.replace(/list|all road|show road|roads in/gi, '').trim();
+      const filtered = q.length > 2 ? this.getFilteredRoads(q, '') : roads;
+      const sample = filtered.slice(0, 6);
+      this.addBotMessage(`🛣️ **${filtered.length.toLocaleString()}** roads in **${this.country.charAt(0).toUpperCase() + this.country.slice(1)}**${q ? ` matching "${q}"` : ''}:`);
       sample.forEach((r, i) => {
         setTimeout(() => {
           const score = this.calcQuality(r);
-          const q = this.qualityLabel(score);
-          this.addBotMessage(`**${i + 1}. ${r.road_name}**\n${r.city}, ${r.state} | ${r.road_type} | ${q.label}`);
-        }, i * 200);
+          const qLabel = this.qualityLabel(score);
+          const label = r.nh_number ? `${r.nh_number} — ${r.city}` : r.road_name.slice(0, 50);
+          this.addBotMessage(`**${i + 1}. ${label}**\n${r.state} | ${r.road_length_km} km | ${qLabel.label}`);
+        }, i * 180);
       });
-      setTimeout(() => this.addBotMessage(`...and ${roads.length - 5} more. Click **Roads** tab to see all.`), sample.length * 200 + 200);
+      if (filtered.length > 6) {
+        setTimeout(() => this.addBotMessage(`…and **${(filtered.length - 6).toLocaleString()}** more. Open the **All Roads** tab or search e.g. *NH 48*.`), sample.length * 180 + 200);
+      }
       return;
     }
 
@@ -383,7 +541,7 @@ const App = {
 
     if (intent.startsWith('ROAD_NAME:')) {
       const id = intent.replace('ROAD_NAME:', '');
-      const road = roads.find(r => r.road_id === id);
+      const road = this.findRoadById(id);
       if (road) {
         this.currentRoad = road;
         this.addBotMessage(`🛣️ Found **${road.road_name}**:`);
@@ -524,21 +682,26 @@ const App = {
   },
 
   setCurrentRoad(roadId) {
-    this.currentRoad = ROADS[this.country].find(r => r.road_id === roadId);
+    this.currentRoad = this.findRoadById(roadId);
     this.showToast('✅ Road selected: ' + this.currentRoad.road_name);
   },
 
   highlightOnMap(roadId) {
     document.getElementById('ctab-map').click();
-    const road = ROADS[this.country].find(r => r.road_id === roadId);
+    const road = this.findRoadById(roadId);
     if (road && this.mapInstance) {
       this.mapInstance.setView([road.location.lat, road.location.lng], 13);
+      const layer = this.mapMarkers.find(m => {
+        const ll = m.getLatLng();
+        return Math.abs(ll.lat - road.location.lat) < 0.0001 && Math.abs(ll.lng - road.location.lng) < 0.0001;
+      });
+      if (layer) layer.openPopup();
     }
   },
 
   /* ─── COMPLAINT MODAL ─── */
   openComplaintModal(roadId, location = '') {
-    const road = ROADS[this.country].find(r => r.road_id === roadId) || this.currentRoad;
+    const road = this.findRoadById(roadId) || this.currentRoad;
     if (!road) return;
     this.complaintRoad = road;
     document.getElementById('complaint-road').value = road.road_name;
@@ -607,11 +770,23 @@ Road ID: ${road.road_id} | Report Date: ${date}`;
   },
 
   cacheRoadsOffline() {
-    if (!this.offlineDB) return;
-    const allRoads = [...ROADS.india, ...ROADS.kenya, ...ROADS.usa];
-    const tx = this.offlineDB.transaction('roads', 'readwrite');
-    const store = tx.objectStore('roads');
-    allRoads.forEach(r => store.put(r));
+    if (!this.offlineDB || typeof ROADS === 'undefined') return;
+    const allRoads = Object.values(ROADS).flat();
+    const chunk = 200;
+    let i = 0;
+    const putNext = () => {
+      if (i >= allRoads.length) {
+        document.getElementById('db-status').textContent = `IndexedDB: ${allRoads.length} roads ✅`;
+        return;
+      }
+      const tx = this.offlineDB.transaction('roads', 'readwrite');
+      const store = tx.objectStore('roads');
+      const slice = allRoads.slice(i, i + chunk);
+      slice.forEach(r => store.put(r));
+      i += chunk;
+      setTimeout(putNext, 0);
+    };
+    putNext();
   },
 
   saveComplaintOffline(complaint) {
@@ -690,12 +865,15 @@ Road ID: ${road.road_id} | Report Date: ${date}`;
     document.getElementById('country-selector').addEventListener('change', e => {
       this.country = e.target.value;
       this.currentRoad = null;
+      this.buildRoadIndex();
+      this.roadsPage = 0;
+      document.getElementById('road-search').value = '';
       this.renderMapMarkers();
-      this.renderRoadsList();
+      this.renderRoadsList('', '', true);
       this.updateStats();
       setTimeout(() => this.initCharts(), 200);
-      const names = { india: '🇮🇳 India', kenya: '🇰🇪 Kenya', usa: '🇺🇸 USA' };
-      this.addBotMessage(`🌍 Switched to **${names[this.country]}** dataset. ${ROADS[this.country].length} roads loaded.`);
+      const names = { india: '🇮🇳 India', kenya: '🇰🇪 Kenya', usa: '🇺🇸 USA', uk: '🇬🇧 UK', australia: '🇦🇺 Australia' };
+      this.addBotMessage(`🌍 Switched to **${names[this.country] || this.country}**. **${this.getRoads().length.toLocaleString()}** highways loaded.`);
     });
 
     // Nav tabs (show/hide content panel views)
@@ -731,11 +909,27 @@ Road ID: ${road.road_id} | Report Date: ${date}`;
     });
 
     // Road search / filter
+    const runRoadSearch = () => {
+      const val = document.getElementById('road-search').value;
+      const type = document.getElementById('road-filter-type').value;
+      this.renderRoadsList(val, type, true);
+      document.getElementById('ctab-roads')?.click();
+    };
     document.getElementById('road-search').addEventListener('input', e => {
-      this.renderRoadsList(e.target.value, document.getElementById('road-filter-type').value);
+      clearTimeout(this.searchDebounce);
+      const val = e.target.value;
+      const type = document.getElementById('road-filter-type').value;
+      this.searchDebounce = setTimeout(() => this.renderRoadsList(val, type, true), 120);
+    });
+    document.getElementById('road-search').addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        clearTimeout(this.searchDebounce);
+        runRoadSearch();
+      }
     });
     document.getElementById('road-filter-type').addEventListener('change', e => {
-      this.renderRoadsList(document.getElementById('road-search').value, e.target.value);
+      this.renderRoadsList(document.getElementById('road-search').value, e.target.value, true);
     });
 
     // Complaint modal close
