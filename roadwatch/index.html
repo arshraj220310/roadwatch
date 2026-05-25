@@ -3,8 +3,11 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>RoadWatch — Road Asset Monitoring</title>
-  <meta name="description" content="RoadWatch: Road asset monitoring, condition tracking, and civic accountability."/>
+  <title>RoadWatch — Infrastructure Intelligence</title>
+  <meta name="description" content="RoadWatch: Monitor road assets, pavement condition, and civic reports across national networks."/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet"/>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"/>
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"/>
@@ -13,258 +16,297 @@
 </head>
 <body class="dashboard-body">
 
-<aside class="sidebar" id="sidebar">
-  <div class="sidebar-brand" title="RoadWatch">
-    <i class="fa-solid fa-road"></i>
-  </div>
-  <nav class="sidebar-nav">
-    <button class="sidebar-btn active" data-view="monitor" title="Monitor">
-      <i class="fa-solid fa-house"></i>
-    </button>
-    <button class="sidebar-btn" data-view="routes" title="Routes">
-      <i class="fa-solid fa-list"></i>
-    </button>
-    <button class="sidebar-btn" data-view="analytics" title="Reports">
-      <i class="fa-solid fa-chart-column"></i>
-    </button>
-    <button class="sidebar-btn" data-view="assistant" title="Assistant">
-      <i class="fa-solid fa-headset"></i>
-    </button>
-  </nav>
-  <div class="sidebar-foot">
-    <button class="sidebar-btn" id="btn-locate" title="My location">
-      <i class="fa-solid fa-location-crosshairs"></i>
-    </button>
-    <button class="sidebar-btn" id="btn-settings" title="Accessibility settings">
-      <i class="fa-solid fa-gear"></i>
-    </button>
-  </div>
-</aside>
-
-<div class="workspace">
-  <header class="top-bar">
-    <div class="top-bar-left">
-      <h1 class="page-title">Road Asset Monitoring</h1>
-      <div class="top-filters">
-        <select class="filter-select" id="country-selector" aria-label="Region">
-          <option value="india">India</option>
-          <option value="usa">United States</option>
-          <option value="kenya">Kenya</option>
-          <option value="uk">United Kingdom</option>
-          <option value="australia">Australia</option>
-        </select>
-        <select class="filter-select" id="state-filter" aria-label="Division">
-          <option value="">All divisions</option>
-        </select>
+<div class="app-shell">
+  <aside class="sidebar nav-rail" id="sidebar" aria-label="Main navigation">
+    <div class="nav-brand">
+      <div class="nav-brand-mark"><i class="fa-solid fa-road" aria-hidden="true"></i></div>
+      <div class="nav-brand-text">
+        <span class="nav-brand-name">RoadWatch</span>
+        <span class="nav-brand-tag">Infrastructure OS</span>
       </div>
     </div>
 
-    <div class="pavement-summary" id="pavement-summary">
-      <span class="ps-label">Pavement condition</span>
-      <div class="ps-bar" id="ps-bar">
-        <span class="ps-seg ps-good" id="ps-good" style="width:0%"></span>
-        <span class="ps-seg ps-fair" id="ps-fair" style="width:0%"></span>
-        <span class="ps-seg ps-poor" id="ps-poor" style="width:0%"></span>
-      </div>
-      <div class="ps-legend" id="ps-legend"></div>
-    </div>
+    <nav class="sidebar-nav nav-menu">
+      <button class="sidebar-btn nav-item active" data-view="monitor" type="button">
+        <i class="fa-solid fa-map-location-dot"></i>
+        <span>Live map</span>
+      </button>
+      <button class="sidebar-btn nav-item" data-view="routes" type="button">
+        <i class="fa-solid fa-route"></i>
+        <span>Route registry</span>
+      </button>
+      <button class="sidebar-btn nav-item" data-view="analytics" type="button">
+        <i class="fa-solid fa-chart-pie"></i>
+        <span>Insights</span>
+      </button>
+      <button class="sidebar-btn nav-item" data-view="assistant" type="button">
+        <i class="fa-solid fa-comments"></i>
+        <span>Assistant</span>
+      </button>
+    </nav>
 
-    <div class="top-stats">
-      <div class="top-stat">
-        <span class="top-stat-val" id="stat-total">—</span>
-        <span class="top-stat-lbl">Total assets</span>
-      </div>
-      <div class="top-stat">
-        <span class="top-stat-val" id="stat-miles">—</span>
-        <span class="top-stat-lbl">Total km</span>
-      </div>
-      <div class="top-stat">
-        <span class="top-stat-val stat-red" id="stat-complaints">0</span>
-        <span class="top-stat-lbl">Reports filed</span>
-      </div>
+    <div class="sidebar-foot nav-tools">
+      <button class="sidebar-btn nav-tool" id="btn-locate" type="button" title="My location">
+        <i class="fa-solid fa-location-crosshairs"></i>
+        <span>Locate me</span>
+      </button>
+      <button class="sidebar-btn nav-tool" id="btn-settings" type="button" title="Settings">
+        <i class="fa-solid fa-sliders"></i>
+        <span>Settings</span>
+      </button>
     </div>
-  </header>
+  </aside>
 
-  <div class="dashboard-body-inner">
-    <!-- MONITOR: Map + Routes -->
-    <div class="view-panel active" id="view-monitor">
-      <div class="map-panel">
-        <div class="map-overlay map-search-wrap">
-          <i class="fa-solid fa-magnifying-glass"></i>
-          <input type="search" id="map-search" class="map-search-input" placeholder="Search division, NH number, city…" autocomplete="off"/>
+  <div class="workspace app-main">
+    <header class="top-bar command-bar">
+      <div class="command-bar-top">
+        <div class="command-title">
+          <h1 class="page-title">Network overview</h1>
+          <p class="page-subtitle" id="page-context">Real-time asset monitoring</p>
         </div>
+        <div class="top-filters command-filters">
+          <label class="filter-label">
+            <span>Region</span>
+            <select class="filter-select" id="country-selector" aria-label="Region">
+              <option value="india">India</option>
+              <option value="usa">United States</option>
+              <option value="kenya">Kenya</option>
+              <option value="uk">United Kingdom</option>
+              <option value="australia">Australia</option>
+            </select>
+          </label>
+          <label class="filter-label">
+            <span>Division</span>
+            <select class="filter-select" id="state-filter" aria-label="Division">
+              <option value="">All divisions</option>
+            </select>
+          </label>
+        </div>
+      </div>
 
-        <div class="map-overlay map-filter-panel" id="map-filter-panel">
-          <button class="map-tool-btn" id="btn-map-filter" title="Filter severity" type="button">
-            <i class="fa-solid fa-filter"></i>
-          </button>
-          <div class="filter-dropdown" id="filter-dropdown">
-            <label><input type="checkbox" id="filter-high" checked/> High priority</label>
-            <label><input type="checkbox" id="filter-mid" checked/> Medium priority</label>
-            <label><input type="checkbox" id="filter-low" checked/> Low priority</label>
-            <div class="filter-divider"></div>
-            <label><input type="checkbox" id="filter-reports" checked/> Show public reports</label>
-            <label class="inline-field">
-              <span>Issue</span>
-              <select id="filter-report-type" class="filter-select filter-select-sm" aria-label="Report type">
-                <option value="">All</option>
-                <option value="Pothole">Pothole</option>
-                <option value="Road damage / cracks">Road damage / cracks</option>
-                <option value="Waterlogging">Waterlogging</option>
-                <option value="Missing signage">Missing signage</option>
-                <option value="Encroachment">Encroachment</option>
-                <option value="Other">Other</option>
+      <div class="command-bar-metrics">
+        <div class="kpi-card">
+          <span class="kpi-label">Assets</span>
+          <span class="top-stat-val kpi-value" id="stat-total">—</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-label">Network km</span>
+          <span class="top-stat-val kpi-value" id="stat-miles">—</span>
+        </div>
+        <div class="kpi-card kpi-alert">
+          <span class="kpi-label">Citizen reports</span>
+          <span class="top-stat-val kpi-value stat-red" id="stat-complaints">0</span>
+        </div>
+        <div class="pavement-summary kpi-pavement" id="pavement-summary">
+          <span class="ps-label">Pavement mix</span>
+          <div class="ps-bar" id="ps-bar">
+            <span class="ps-seg ps-good" id="ps-good" style="width:0%"></span>
+            <span class="ps-seg ps-fair" id="ps-fair" style="width:0%"></span>
+            <span class="ps-seg ps-poor" id="ps-poor" style="width:0%"></span>
+          </div>
+          <div class="ps-legend" id="ps-legend"></div>
+        </div>
+      </div>
+    </header>
+
+    <div class="dashboard-body-inner app-content">
+      <div class="view-panel active" id="view-monitor">
+        <div class="monitor-layout">
+          <div class="map-panel map-stage">
+            <div class="map-overlay map-search-wrap">
+              <i class="fa-solid fa-magnifying-glass"></i>
+              <input type="search" id="map-search" class="map-search-input" placeholder="Search NH, city, state…" autocomplete="off"/>
+            </div>
+
+            <div class="map-overlay map-filter-panel" id="map-filter-panel">
+              <button class="map-tool-btn" id="btn-map-filter" title="Map filters" type="button">
+                <i class="fa-solid fa-sliders"></i>
+              </button>
+              <div class="filter-dropdown" id="filter-dropdown">
+                <p class="filter-dropdown-title">Map layers</p>
+                <label><input type="checkbox" id="filter-high" checked/> High priority</label>
+                <label><input type="checkbox" id="filter-mid" checked/> Medium priority</label>
+                <label><input type="checkbox" id="filter-low" checked/> Low priority</label>
+                <div class="filter-divider"></div>
+                <label><input type="checkbox" id="filter-reports" checked/> Public reports</label>
+                <label class="inline-field">
+                  <span>Issue</span>
+                  <select id="filter-report-type" class="filter-select filter-select-sm" aria-label="Report type">
+                    <option value="">All</option>
+                    <option value="Pothole">Pothole</option>
+                    <option value="Road damage / cracks">Road damage / cracks</option>
+                    <option value="Waterlogging">Waterlogging</option>
+                    <option value="Missing signage">Missing signage</option>
+                    <option value="Encroachment">Encroachment</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </label>
+                <label class="inline-field">
+                  <span>Days</span>
+                  <select id="filter-report-days" class="filter-select filter-select-sm" aria-label="Report days">
+                    <option value="7">7</option>
+                    <option value="30" selected>30</option>
+                    <option value="180">180</option>
+                    <option value="365">365</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+
+            <div class="map-overlay map-legend">
+              <div class="map-legend-title">Condition</div>
+              <div class="legend-row"><span class="legend-dot lg-good"></span> Good</div>
+              <div class="legend-row"><span class="legend-dot lg-fair"></span> Fair</div>
+              <div class="legend-row"><span class="legend-dot lg-poor"></span> Poor</div>
+              <div class="map-marker-count" id="map-marker-count">—</div>
+            </div>
+
+            <div class="map-overlay map-tools-right">
+              <button class="map-tool-btn" id="btn-map-reset" title="Reset region view" type="button">
+                <i class="fa-solid fa-earth-asia"></i>
+              </button>
+            </div>
+
+            <div id="map"></div>
+          </div>
+
+          <aside class="routes-panel route-deck">
+            <div class="routes-panel-head">
+              <div class="routes-panel-title">
+                <h2>Route registry</h2>
+                <div class="roads-subhead" id="roads-subhead">All road types</div>
+              </div>
+              <div class="routes-head-actions">
+                <button class="icon-btn" id="btn-nearby" type="button" title="Sort by distance">
+                  <i class="fa-solid fa-location-dot"></i>
+                </button>
+                <button class="icon-btn" id="btn-export" type="button" title="Export CSV">
+                  <i class="fa-solid fa-download"></i>
+                </button>
+                <button class="icon-btn" id="btn-share" type="button" title="Share link">
+                  <i class="fa-solid fa-share-nodes"></i>
+                </button>
+              </div>
+            </div>
+            <div class="routes-search-wrap">
+              <div class="search-field">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <input type="search" id="road-search" class="routes-search" placeholder="Filter by ID, city, type…" autocomplete="off"/>
+              </div>
+              <select class="filter-select filter-select-sm" id="road-filter-type" aria-label="Road type">
+                <option value="">All types</option>
+                <option value="NH">National Highway</option>
+                <option value="SH">State Highway</option>
+                <option value="MDR">MDR</option>
+                <option value="City">City</option>
               </select>
-            </label>
-            <label class="inline-field">
-              <span>Days</span>
-              <select id="filter-report-days" class="filter-select filter-select-sm" aria-label="Report days">
-                <option value="7">7</option>
-                <option value="30" selected>30</option>
-                <option value="180">180</option>
-                <option value="365">365</option>
-              </select>
-            </label>
-          </div>
+            </div>
+            <div class="routes-list" id="roads-list" role="list"></div>
+            <div class="roads-list-footer" id="roads-list-footer"></div>
+          </aside>
         </div>
-
-        <div class="map-overlay map-legend">
-          <div class="map-legend-title">Highway markers</div>
-          <div class="legend-row"><span class="legend-dot lg-good"></span> Good</div>
-          <div class="legend-row"><span class="legend-dot lg-fair"></span> Fair</div>
-          <div class="legend-row"><span class="legend-dot lg-poor"></span> Poor</div>
-          <div class="map-marker-count" id="map-marker-count">—</div>
-        </div>
-
-        <div class="map-overlay map-tools-right">
-          <button class="map-tool-btn" id="btn-map-reset" title="Reset view" type="button">
-            <i class="fa-solid fa-globe"></i>
-          </button>
-        </div>
-
-        <div id="map"></div>
       </div>
 
-      <aside class="routes-panel">
-        <div class="routes-panel-head">
-          <div style="display:flex;flex-direction:column;gap:2px;">
-            <h2>List of Routes</h2>
-            <div class="roads-subhead" id="roads-subhead">Filtered view</div>
-          </div>
-          <div class="routes-head-actions">
-            <button class="icon-btn" id="btn-nearby" type="button" title="Sort by distance">
-              <i class="fa-solid fa-location-dot"></i>
-            </button>
-            <button class="icon-btn" id="btn-export" type="button" title="Export CSV">
-              <i class="fa-solid fa-file-arrow-down"></i>
-            </button>
-            <button class="icon-btn" id="btn-share" type="button" title="Copy share link">
-              <i class="fa-solid fa-link"></i>
-            </button>
+      <div class="view-panel" id="view-analytics">
+        <div class="analytics-page">
+          <header class="section-header">
+            <h2>Network insights</h2>
+            <p>Budget, composition, and condition analytics for the active region.</p>
+          </header>
+          <div class="analytics-view" id="analytics-grid">
+            <div class="analytics-card full-width">
+              <h3><i class="fa-solid fa-chart-column"></i> Budget — sanctioned vs spent</h3>
+              <canvas id="budget-chart" height="120"></canvas>
+            </div>
+            <div class="analytics-card">
+              <h3><i class="fa-solid fa-layer-group"></i> Asset types</h3>
+              <canvas id="type-chart" height="160"></canvas>
+            </div>
+            <div class="analytics-card">
+              <h3><i class="fa-solid fa-gauge-high"></i> Condition split</h3>
+              <canvas id="quality-chart" height="160"></canvas>
+            </div>
+            <div class="analytics-card full-width">
+              <h3><i class="fa-solid fa-triangle-exclamation"></i> Most reported corridors</h3>
+              <canvas id="pothole-chart" height="90"></canvas>
+            </div>
           </div>
         </div>
-        <div class="routes-search-wrap">
-          <i class="fa-solid fa-magnifying-glass"></i>
-          <input type="search" id="road-search" class="routes-search" placeholder="Filter routes…" autocomplete="off"/>
-          <select class="filter-select filter-select-sm" id="road-filter-type" aria-label="Road type">
-            <option value="">All types</option>
-            <option value="NH">National Highway</option>
-            <option value="SH">State Highway</option>
-            <option value="MDR">MDR</option>
-            <option value="City">City</option>
-          </select>
-        </div>
-        <div class="routes-list" id="roads-list" role="list"></div>
-        <div class="roads-list-footer" id="roads-list-footer"></div>
-      </aside>
-    </div>
+      </div>
 
-    <!-- ANALYTICS -->
-    <div class="view-panel" id="view-analytics">
-      <div class="analytics-view" id="analytics-grid">
-        <div class="analytics-card full-width">
-          <h3><i class="fa-solid fa-chart-bar"></i> Budget: Sanctioned vs Spent (Top 8)</h3>
-          <canvas id="budget-chart" height="120"></canvas>
-        </div>
-        <div class="analytics-card">
-          <h3><i class="fa-solid fa-chart-pie"></i> Road type distribution</h3>
-          <canvas id="type-chart" height="160"></canvas>
-        </div>
-        <div class="analytics-card">
-          <h3><i class="fa-solid fa-chart-pie"></i> Condition distribution</h3>
-          <canvas id="quality-chart" height="160"></canvas>
-        </div>
-        <div class="analytics-card full-width">
-          <h3><i class="fa-solid fa-triangle-exclamation"></i> Top reported routes</h3>
-          <canvas id="pothole-chart" height="90"></canvas>
-        </div>
+      <div class="view-panel" id="view-assistant">
+        <section class="chat-panel chat-panel-full">
+          <div class="chat-header">
+            <div class="chat-header-icon"><i class="fa-solid fa-sparkles"></i></div>
+            <div class="chat-header-info">
+              <h3>RoadWatch Assistant</h3>
+              <span class="status-online"><span class="pulse-dot"></span> Ready to help</span>
+            </div>
+          </div>
+          <div class="chat-messages" id="chat-messages"></div>
+          <div class="quick-actions" id="quick-actions">
+            <button class="quick-btn" data-msg="Find my nearest road">Nearest road</button>
+            <button class="quick-btn" data-msg="Report a pothole">Report issue</button>
+            <button class="quick-btn" data-msg="Show road budget">Budget lookup</button>
+            <button class="quick-btn" data-msg="What is the road quality score?">Condition score</button>
+            <button class="quick-btn" data-msg="Help">Help</button>
+          </div>
+          <div class="chat-input-area">
+            <div class="chat-input-wrap">
+              <textarea class="chat-input" id="chat-input" placeholder="Ask about routes, budgets, or file a report…" rows="1"></textarea>
+              <button class="send-btn" id="send-btn" title="Send" type="button">
+                <i class="fa-solid fa-arrow-up"></i>
+              </button>
+              <button class="voice-btn" id="voice-btn" title="Voice input" type="button">
+                <i class="fa-solid fa-microphone"></i>
+              </button>
+            </div>
+          </div>
+        </section>
       </div>
     </div>
 
-    <!-- ASSISTANT (Chat) -->
-    <div class="view-panel" id="view-assistant">
-      <section class="chat-panel chat-panel-full">
-        <div class="chat-header">
-          <div class="chat-header-icon"><i class="fa-solid fa-robot"></i></div>
-          <div class="chat-header-info">
-            <h3>RoadWatch Assistant</h3>
-            <span class="status-online">Online — Civic support</span>
-          </div>
-        </div>
-        <div class="chat-messages" id="chat-messages"></div>
-        <div class="quick-actions" id="quick-actions">
-          <button class="quick-btn" data-msg="Find my nearest road">Nearest road</button>
-          <button class="quick-btn" data-msg="Report a pothole">Report issue</button>
-          <button class="quick-btn" data-msg="Show road budget">Budget</button>
-          <button class="quick-btn" data-msg="What is the road quality score?">Condition score</button>
-          <button class="quick-btn" data-msg="Help">Help</button>
-        </div>
-        <div class="chat-input-area">
-          <div class="chat-input-wrap">
-            <textarea class="chat-input" id="chat-input" placeholder="Ask about routes, budgets, complaints…" rows="1"></textarea>
-            <button class="send-btn" id="send-btn" title="Send" type="button">
-              <i class="fa-solid fa-paper-plane"></i>
-            </button>
-            <button class="voice-btn" id="voice-btn" title="Voice input" type="button">
-              <i class="fa-solid fa-microphone"></i>
-            </button>
-          </div>
-        </div>
-      </section>
-    </div>
+    <footer class="status-bar" id="status-bar">
+      <div class="online-badge">
+        <div class="online-dot online" id="online-dot"></div>
+        <span id="online-text">Connected</span>
+      </div>
+      <span class="status-sep">·</span>
+      <span id="location-text">Detecting location…</span>
+      <span class="status-sep">·</span>
+      <span id="db-status">Storage: loading…</span>
+    </footer>
   </div>
-
-  <footer class="status-bar" id="status-bar">
-    <div class="online-badge">
-      <div class="online-dot online" id="online-dot"></div>
-      <span id="online-text">Online</span>
-    </div>
-    <span class="status-sep">|</span>
-    <span id="location-text">Detecting location…</span>
-    <span class="status-sep">|</span>
-    <span id="db-status">IndexedDB: Loading…</span>
-  </footer>
 </div>
 
-<!-- Route detail drawer -->
-<div class="route-drawer" id="route-drawer">
+<div class="drawer-backdrop" id="drawer-backdrop" aria-hidden="true"></div>
+<div class="route-drawer" id="route-drawer" role="dialog" aria-labelledby="drawer-title">
   <div class="route-drawer-head">
-    <h3 id="drawer-title">Route details</h3>
-    <button class="modal-close" id="drawer-close" type="button" aria-label="Close">&times;</button>
+    <div>
+      <p class="drawer-eyebrow">Corridor detail</p>
+      <h3 id="drawer-title">Route details</h3>
+    </div>
+    <button class="modal-close drawer-close-btn" id="drawer-close" type="button" aria-label="Close">
+      <i class="fa-solid fa-xmark"></i>
+    </button>
   </div>
   <div class="route-drawer-body" id="drawer-body"></div>
   <div class="route-drawer-actions">
-    <button class="btn btn-primary" id="drawer-report-btn" type="button">File complaint</button>
-    <button class="btn btn-secondary" id="drawer-map-btn" type="button">Show on map</button>
-    <button class="btn btn-secondary" id="drawer-edit-btn" type="button">Edit (local)</button>
+    <button class="btn btn-primary" id="drawer-report-btn" type="button">
+      <i class="fa-solid fa-flag"></i> File report
+    </button>
+    <button class="btn btn-secondary" id="drawer-map-btn" type="button">On map</button>
+    <button class="btn btn-ghost" id="drawer-edit-btn" type="button">Edit locally</button>
   </div>
 </div>
 
 <div class="modal-overlay" id="complaint-modal">
   <div class="modal-box">
     <div class="modal-header">
-      <h2>File a complaint</h2>
-      <button class="modal-close" id="complaint-modal-close" type="button">&times;</button>
+      <h2>Citizen report</h2>
+      <button class="modal-close" id="complaint-modal-close" type="button" aria-label="Close">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
     </div>
     <div class="form-group">
       <label class="form-label">Your name (optional)</label>
@@ -291,7 +333,7 @@
     </div>
     <div class="form-group">
       <label class="form-label">Location on road</label>
-      <input class="form-input" id="complaint-location" placeholder="e.g. KM 45, before flyover"/>
+      <input class="form-input" id="complaint-location" placeholder="e.g. KM 45, near flyover"/>
     </div>
     <div class="form-actions">
       <button class="btn btn-secondary" id="complaint-preview-btn" type="button">
@@ -302,7 +344,7 @@
       </button>
     </div>
     <div id="letter-preview-wrap" style="display:none; margin-top:16px;">
-      <div class="form-label">Complaint letter preview</div>
+      <div class="form-label">Letter preview</div>
       <div class="letter-preview" id="letter-content"></div>
       <button class="btn btn-secondary" style="margin-top:10px;" id="download-letter-btn" type="button">
         <i class="fa-solid fa-download"></i> Download
@@ -314,22 +356,24 @@
 <div class="modal-overlay" id="settings-modal">
   <div class="modal-box">
     <div class="modal-header">
-      <h2>Accessibility</h2>
-      <button class="modal-close" id="settings-close" type="button">&times;</button>
+      <h2>Preferences</h2>
+      <button class="modal-close" id="settings-close" type="button" aria-label="Close">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
     </div>
     <div class="form-group">
-      <label style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
-        <span class="form-label" style="margin:0;">High contrast</span>
+      <label class="pref-row">
+        <span class="form-label">High contrast</span>
         <input type="checkbox" id="toggle-contrast"/>
       </label>
     </div>
     <div class="form-group">
-      <label style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
-        <span class="form-label" style="margin:0;">Reduced motion</span>
+      <label class="pref-row">
+        <span class="form-label">Reduced motion</span>
         <input type="checkbox" id="toggle-motion"/>
       </label>
     </div>
-    <div class="roads-subhead">Shortcuts: Alt+L (locate), Alt+E (export), Alt+S (share link).</div>
+    <p class="roads-subhead pref-hint">Shortcuts: Alt+L locate · Alt+E export · Alt+S share</p>
   </div>
 </div>
 

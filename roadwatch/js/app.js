@@ -73,8 +73,10 @@ const App = {
   roadMatchesQuery(road, rawQuery) {
     const q = this.normalizeSearchQuery(rawQuery);
     if (!q) return true;
-    const hay = [road.road_id, road.road_name, road.nh_number, road.city, road.state, road.description]
-      .filter(Boolean).join(' ').toLowerCase().replace(/[^\w\s]/g, ' ');
+    const hay = [
+      road.road_id, road.road_name, road.nh_number, road.sh_number, road.mdr_id,
+      road.road_type, road.city, road.state, road.description,
+    ].filter(Boolean).join(' ').toLowerCase().replace(/[^\w\s]/g, ' ');
     const nhInQuery = q.match(/(?:^|\s)nh\s*(\d+[a-z]*)/) || q.match(/^(\d+[a-z]*)$/);
     if (nhInQuery) {
       const num = nhInQuery[1] || nhInQuery[0];
@@ -83,6 +85,21 @@ const App = {
       if (roadNh === nhTag || roadNh.startsWith(nhTag + ' ') || roadNh.includes(nhTag)) return true;
       if (hay.includes(nhTag)) return true;
     }
+    const shInQuery = q.match(/(?:^|\s)sh\s*(\d+)/);
+    if (shInQuery) {
+      const shTag = 'sh ' + shInQuery[1];
+      const roadSh = (road.sh_number || '').toLowerCase().replace(/\s+/g, ' ');
+      if (roadSh === shTag || roadSh.includes(shTag) || hay.includes(shTag)) return true;
+    }
+    const mdrInQuery = q.match(/(?:^|\s)mdr\s*(\d+)/);
+    if (mdrInQuery) {
+      const mdrTag = 'mdr ' + mdrInQuery[1];
+      const roadMdr = (road.mdr_id || '').toLowerCase().replace(/\s+/g, ' ');
+      if (roadMdr === mdrTag || roadMdr.includes(mdrTag) || hay.includes(mdrTag)) return true;
+    }
+    if (q.includes('state highway') && road.road_type === 'SH') return true;
+    if (q.includes('district') && road.road_type === 'MDR') return true;
+    if (q.includes('city') && road.road_type === 'City') return true;
     const tokens = q.split(' ').filter(Boolean);
     return tokens.every(t => hay.includes(t));
   },
@@ -126,6 +143,32 @@ const App = {
     return centers[this.country] || centers.india;
   },
 
+  /** Single map view per region — no horizontal world copies (markers only exist once). */
+  countryBounds() {
+    const boxes = {
+      india: [[6.0, 66.5], [37.5, 99.0]],
+      kenya: [[-5.5, 33.5], [5.5, 42.5]],
+      usa: [[22.0, -130.0], [52.0, -63.0]],
+      uk: [[48.5, -9.5], [61.5, 3.0]],
+      australia: [[-45.0, 110.0], [-9.0, 156.0]],
+    };
+    const box = boxes[this.country] || boxes.india;
+    return L.latLngBounds(box[0], box[1]);
+  },
+
+  applyMapRegion(fitBounds = false) {
+    if (!this.mapInstance) return;
+    const bounds = this.countryBounds();
+    this.mapInstance.setMaxBounds(bounds);
+    if (fitBounds) {
+      this.mapInstance.fitBounds(bounds, { padding: [24, 24], maxZoom: 8 });
+    } else {
+      const { center, zoom } = this.countryCenter();
+      this.mapInstance.setView(center, zoom, { animate: false });
+    }
+    this.mapInstance.invalidateSize();
+  },
+
   init() {
     this.loadOverrides();
     this.applyAccessibilityFromStorage();
@@ -142,6 +185,9 @@ const App = {
     this.monitorOnline();
     setTimeout(() => this.initCharts(), 400);
     this.applyUrlState();
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => document.body.classList.add('ui-ready'));
+    });
   },
 
   populateStateFilter() {
@@ -173,9 +219,9 @@ const App = {
   },
 
   qualityLabel(score) {
-    if (score >= 75) return { label: 'Good', cls: 'quality-good', color: '#3cb371', pill: 'cp-good' };
-    if (score >= 45) return { label: 'Fair', cls: 'quality-moderate', color: '#e8a838', pill: 'cp-fair' };
-    return { label: 'Poor', cls: 'quality-poor', color: '#e05252', pill: 'cp-poor' };
+    if (score >= 75) return { label: 'Good', cls: 'quality-good', color: '#059669', pill: 'cp-good' };
+    if (score >= 45) return { label: 'Fair', cls: 'quality-moderate', color: '#d97706', pill: 'cp-fair' };
+    return { label: 'Poor', cls: 'quality-poor', color: '#dc2626', pill: 'cp-poor' };
   },
 
   priorityFromScore(score) {
@@ -201,10 +247,27 @@ const App = {
   },
 
   routeDisplayId(road) {
+    if (road.sh_number) return road.sh_number.replace(/\s+/g, '-');
+    if (road.mdr_id) return road.mdr_id.replace(/\s+/g, '-');
     if (road.nh_number) return road.nh_number.replace(/\s+/g, '-');
+    if (road.road_type === 'City' && road.road_name) {
+      const short = road.road_name.split('(')[0].trim();
+      return short.length > 28 ? short.slice(0, 28) + '…' : short;
+    }
     const m = road.road_id.match(/NH-?(\d+[A-Za-z]*)/i);
     if (m) return 'NH-' + m[1];
     return road.road_id.split('-').slice(0, 2).join('-');
+  },
+
+  typeBreakdownLabel(roads) {
+    const c = { NH: 0, SH: 0, MDR: 0, City: 0 };
+    roads.forEach(r => { if (c[r.road_type] !== undefined) c[r.road_type]++; });
+    const parts = [];
+    if (c.NH) parts.push(`${c.NH} NH`);
+    if (c.SH) parts.push(`${c.SH} SH`);
+    if (c.MDR) parts.push(`${c.MDR} MDR`);
+    if (c.City) parts.push(`${c.City} City`);
+    return parts.join(' · ');
   },
 
   formatAmount(amount, country) {
@@ -244,6 +307,8 @@ const App = {
     document.getElementById('stat-miles').textContent = Math.round(totalKm).toLocaleString();
     const complaints = parseInt(localStorage.getItem('rw_complaints') || '0', 10);
     document.getElementById('stat-complaints').textContent = complaints;
+    this.pulseStat('stat-total');
+    this.pulseStat('stat-miles');
   },
 
   highwayDotIcon(road, selected = false) {
@@ -261,10 +326,29 @@ const App = {
 
   initMap() {
     const { center, zoom } = this.countryCenter();
-    this.mapInstance = L.map('map', { zoomControl: false, attributionControl: false }).setView(center, zoom);
+    const bounds = this.countryBounds();
+    this.mapInstance = L.map('map', {
+      zoomControl: false,
+      attributionControl: false,
+      worldCopyJump: true,
+      maxBounds: bounds,
+      maxBoundsViscosity: 1.0,
+    }).setView(center, zoom);
     L.control.zoom({ position: 'bottomright' }).addTo(this.mapInstance);
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 19 }).addTo(this.mapInstance);
+    this.baseTileLayer = L.tileLayer(
+      'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+      { maxZoom: 19, noWrap: true }
+    ).addTo(this.mapInstance);
+    this.mapInstance.on('moveend', () => this.refreshMarkersInView());
+    window.addEventListener('resize', () => {
+      if (this.mapInstance) this.mapInstance.invalidateSize();
+    });
     this.renderMapMarkers();
+  },
+
+  refreshMarkersInView() {
+    if (!this.markerCluster || !this.mapInstance) return;
+    this.markerCluster.refreshClusters();
   },
 
   scheduleMapRender() {
@@ -287,6 +371,7 @@ const App = {
       spiderfyOnMaxZoom: true,
       showCoverageOnHover: false,
       disableClusteringAtZoom: 13,
+      removeOutsideVisibleBounds: false,
       chunkedLoading: true,
       chunkInterval: 80,
     });
@@ -442,10 +527,11 @@ const App = {
           <div class="detail-row"><span>Email</span><span><a class="drawer-link" href="mailto:${this.escapeHtml(auth.email || '')}">${this.escapeHtml(auth.email || '')}</a></span></div>
         ` : ''}
       </div>`;
+    document.getElementById('drawer-backdrop')?.classList.add('open');
     document.getElementById('route-drawer').classList.add('open');
     document.getElementById('drawer-report-btn').onclick = () => this.openComplaintModal(road.road_id);
     document.getElementById('drawer-map-btn').onclick = () => {
-      document.getElementById('route-drawer').classList.remove('open');
+      this.closeDrawer();
       this.selectRoad(road.road_id, false);
     };
     const editBtn = document.getElementById('drawer-edit-btn');
@@ -505,6 +591,7 @@ const App = {
   },
 
   closeDrawer() {
+    document.getElementById('drawer-backdrop')?.classList.remove('open');
     document.getElementById('route-drawer')?.classList.remove('open');
   },
 
@@ -607,14 +694,19 @@ const App = {
       if (state) parts.push(state);
       if (type) parts.push(type);
       if (this.nearbyMode) parts.push('Nearby');
-      sub.textContent = parts.length ? parts.join(' · ') : 'Filtered view';
+      const breakdown = this.typeBreakdownLabel(all);
+      if (parts.length) {
+        sub.textContent = parts.join(' · ') + (breakdown ? ` · ${breakdown}` : '');
+      } else {
+        sub.textContent = breakdown || 'Filtered view';
+      }
     }
 
     const list = document.getElementById('roads-list');
     if (!page.length) {
-      list.innerHTML = '<div class="roads-empty">No routes match. Try NH number, city, or state.</div>';
+      list.innerHTML = '<div class="roads-empty">No routes match. Try NH/SH/MDR number, city, state, or road type.</div>';
     } else {
-      list.innerHTML = page.map(road => {
+      list.innerHTML = page.map((road, i) => {
         const score = this.calcQuality(road);
         const q = this.qualityLabel(score);
         const pr = this.priorityLabel(score);
@@ -622,9 +714,12 @@ const App = {
         const safeId = road.road_id.replace(/'/g, "\\'");
         const defective = road.pothole_reports || 0;
         const totalSeg = Math.max(10, Math.round((road.road_length_km || 50) / 5));
-        return `<article class="route-card${road.road_id === this.selectedRoadId ? ' selected' : ''}" data-road-id="${safeId}" onclick="App.selectRoad('${safeId}', true)">
+        const typeBadge = road.road_type
+          ? `<span class="road-type-badge badge-${road.road_type}">${road.road_type}</span>` : '';
+        return `<article class="route-card animate-in${road.road_id === this.selectedRoadId ? ' selected' : ''}" style="--card-i:${Math.min(i, 12)}" data-road-id="${safeId}" onclick="App.selectRoad('${safeId}', true)">
           <div class="route-card-top">
             <span class="route-card-id">${this.escapeHtml(rid)}</span>
+            ${typeBadge}
             <button type="button" class="route-card-view" onclick="event.stopPropagation();App.viewRoad('${safeId}')">View</button>
           </div>
           <span class="priority-tag ${pr.cls}">${pr.text}</span>
@@ -668,6 +763,15 @@ const App = {
 
   switchView(view) {
     const panelView = view === 'routes' ? 'monitor' : view;
+    document.body.dataset.activeView = view;
+    const ctx = document.getElementById('page-context');
+    const labels = {
+      monitor: 'Live map & route registry',
+      routes: 'Browse and filter all corridors',
+      analytics: 'Budget and condition insights',
+      assistant: 'Civic support & reporting',
+    };
+    if (ctx) ctx.textContent = labels[view] || labels.monitor;
     document.querySelectorAll('.sidebar-btn[data-view]').forEach(b => {
       b.classList.toggle('active', b.dataset.view === view);
     });
@@ -694,8 +798,7 @@ const App = {
     this.populateStateFilter();
     this.roadsPage = 0;
     this.applySearch('', 'map');
-    const { center, zoom } = this.countryCenter();
-    this.mapInstance?.setView(center, zoom);
+    this.applyMapRegion(false);
     this.renderMapMarkers();
     this.updateDashboardStats();
     setTimeout(() => this.initCharts(), 200);
@@ -710,8 +813,8 @@ const App = {
   initCharts() {
     const roads = this.getRoads().map(r => this.withOverrides(r));
     if (!document.getElementById('budget-chart')) return;
-    Chart.defaults.color = '#9aa8be';
-    Chart.defaults.font.family = 'IBM Plex Sans';
+    Chart.defaults.color = '#64748b';
+    Chart.defaults.font.family = 'DM Sans';
 
     const top8 = [...roads].sort((a, b) => b.amount_sanctioned - a.amount_sanctioned).slice(0, 8);
     const bCtx = document.getElementById('budget-chart').getContext('2d');
@@ -721,8 +824,8 @@ const App = {
       data: {
         labels: top8.map(r => this.routeDisplayId(r)),
         datasets: [
-          { label: 'Sanctioned', data: top8.map(r => r.amount_sanctioned / 1e7), backgroundColor: '#4a7fd4' },
-          { label: 'Spent', data: top8.map(r => r.amount_spent / 1e7), backgroundColor: '#3d6bb3' },
+          { label: 'Sanctioned', data: top8.map(r => r.amount_sanctioned / 1e7), backgroundColor: '#0d9488' },
+          { label: 'Spent', data: top8.map(r => r.amount_spent / 1e7), backgroundColor: '#5eead4' },
         ],
       },
       options: { responsive: true, plugins: { legend: { position: 'top' } }, scales: { y: { ticks: { callback: v => '₹' + v + ' Cr' } } } },
@@ -734,7 +837,7 @@ const App = {
     if (this.charts.type) this.charts.type.destroy();
     this.charts.type = new Chart(tCtx, {
       type: 'doughnut',
-      data: { labels: Object.keys(typeCounts), datasets: [{ data: Object.values(typeCounts), backgroundColor: ['#4a7fd4', '#7c6bcf', '#e8a838', '#3cb371'], borderWidth: 0 }] },
+      data: { labels: Object.keys(typeCounts), datasets: [{ data: Object.values(typeCounts), backgroundColor: ['#0d9488', '#7c3aed', '#d97706', '#059669'], borderWidth: 0 }] },
       options: { responsive: true, plugins: { legend: { position: 'bottom' } } },
     });
 
@@ -749,7 +852,7 @@ const App = {
       type: 'doughnut',
       data: {
         labels: ['Good', 'Fair', 'Poor'],
-        datasets: [{ data: [qBuckets.Good, qBuckets.Fair, qBuckets.Poor], backgroundColor: ['#3cb371', '#e8a838', '#e05252'], borderWidth: 0 }],
+        datasets: [{ data: [qBuckets.Good, qBuckets.Fair, qBuckets.Poor], backgroundColor: ['#059669', '#d97706', '#dc2626'], borderWidth: 0 }],
       },
       options: { responsive: true, plugins: { legend: { position: 'bottom' } } },
     });
@@ -761,7 +864,7 @@ const App = {
       type: 'bar',
       data: {
         labels: top6.map(r => this.routeDisplayId(r)),
-        datasets: [{ label: 'Reports', data: top6.map(r => r.pothole_reports), backgroundColor: '#e05252' }],
+        datasets: [{ label: 'Reports', data: top6.map(r => r.pothole_reports), backgroundColor: '#ea580c' }],
       },
       options: { indexAxis: 'y', responsive: true, plugins: { legend: { display: false } } },
     });
@@ -1105,11 +1208,25 @@ const App = {
   },
 
   showToast(msg) {
+    document.querySelectorAll('.toast').forEach(el => el.remove());
     const t = document.createElement('div');
     t.className = 'toast';
+    t.setAttribute('role', 'status');
     t.textContent = msg;
     document.body.appendChild(t);
-    setTimeout(() => t.remove(), 3000);
+    requestAnimationFrame(() => t.classList.add('toast-visible'));
+    setTimeout(() => {
+      t.classList.add('toast-out');
+      setTimeout(() => t.remove(), 350);
+    }, 2800);
+  },
+
+  pulseStat(id) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.classList.remove('stat-pulse');
+    void el.offsetWidth;
+    el.classList.add('stat-pulse');
   },
 
   openSettings() {
@@ -1317,11 +1434,15 @@ const App = {
     });
 
     document.getElementById('btn-map-filter')?.addEventListener('click', () => {
-      document.getElementById('filter-dropdown')?.classList.toggle('open');
+      const dd = document.getElementById('filter-dropdown');
+      const btn = document.getElementById('btn-map-filter');
+      dd?.classList.toggle('open');
+      btn?.classList.toggle('active', !!dd?.classList.contains('open'));
     });
+    document.getElementById('drawer-backdrop')?.addEventListener('click', () => this.closeDrawer());
     document.getElementById('btn-map-reset')?.addEventListener('click', () => {
-      const { center, zoom } = this.countryCenter();
-      this.mapInstance?.setView(center, zoom);
+      this.applyMapRegion(true);
+      this.renderMapMarkers();
     });
 
     document.getElementById('drawer-close')?.addEventListener('click', () => this.closeDrawer());
@@ -1371,11 +1492,19 @@ const App = {
       const panel = document.getElementById('map-filter-panel');
       if (panel && !panel.contains(e.target)) {
         document.getElementById('filter-dropdown')?.classList.remove('open');
+        document.getElementById('btn-map-filter')?.classList.remove('active');
       }
     });
 
     // Keyboard shortcuts
     document.addEventListener('keydown', e => {
+      if (e.key === 'Escape') {
+        this.closeDrawer();
+        this.closeSettings();
+        document.getElementById('complaint-modal')?.classList.remove('active');
+        document.getElementById('filter-dropdown')?.classList.remove('open');
+        document.getElementById('btn-map-filter')?.classList.remove('active');
+      }
       if (!e.altKey) return;
       if (e.key.toLowerCase() === 'l') { e.preventDefault(); this.locateUser(); }
       if (e.key.toLowerCase() === 'e') { e.preventDefault(); this.exportCsv(); }
