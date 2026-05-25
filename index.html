@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Roadwatch Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <aside class="sidebar">
+            <div class="logo">
+                <span class="logo-icon">🛣️</span>
+                <span class="logo-text">ROADWATCH</span>
+            </div>
+            <nav class="nav-menu">
+                <a href="#" class="nav-item active" data-section="dashboard">
+                    <span class="nav-icon">📊</span>
+                    <span class="nav-text">Dashboard</span>
+                </a>
+                <a href="#" class="nav-item" data-section="routes">
+                    <span class="nav-icon">🛣️</span>
+                    <span class="nav-text">Routes</span>
+                </a>
+                <a href="#" class="nav-item" data-section="incidents">
+                    <span class="nav-icon">⚠️</span>
+                    <span class="nav-text">Incidents</span>
+                </a>
+                <a href="#" class="nav-item" data-section="alerts">
+                    <span class="nav-icon">🔔</span>
+                    <span class="nav-text">Alerts</span>
+                </a>
+                <a href="#" class="nav-item" data-section="reports">
+                    <span class="nav-icon">📈</span>
+                    <span class="nav-text">Reports</span>
+                </a>
+                <a href="#" class="nav-item" data-section="analytics">
+                    <span class="nav-icon">📉</span>
+                    <span class="nav-text">Analytics</span>
+                </a>
+            </nav>
+            <div class="version">v 1.0.0</div>
+        </aside>
+        
+        <main class="main-content">
+            <header class="header">
+                <h1 class="page-title">Roadwatch</h1>
+                <div class="header-actions">
+                    <button class="notification-bell">🔔</button>
+                    <div class="user-profile">
+                        <span class="user-icon">👤</span>
+                        <span class="user-name">Admin User</span>
+                        <span class="dropdown-arrow">▼</span>
+                    </div>
+                </div>
+            </header>
+            
+            <section id="dashboard" class="content-section active">
+                <div class="dashboard-header">
+                    <div>
+                        <h2 class="section-title">Dashboard</h2>
+                        <p class="section-subtitle">Overview of road network across the world</p>
+                    </div>
+                    <div class="header-controls">
+                        <select class="country-selector">
+                            <option>🌍 All Countries</option>
+                            <option>🇦🇺 Australia</option>
+                            <option>🇬🇧 United Kingdom</option>
+                            <option>🇩🇪 Germany</option>
+                            <option>🇺🇸 United States</option>
+                        </select>
+                        <button class="export-btn">📥 Export Report</button>
+                    </div>
+                </div>
+                
+                <div class="stat-cards-grid">
+                    <div class="stat-card total-routes">
+                        <div class="stat-icon">🛣️</div>
+                        <div class="stat-content">
+                            <div class="stat-value">12,842</div>
+                            <div class="stat-label">Total Routes</div>
+                            <div class="stat-description">Across the world</div>
+                        </div>
+                    </div>
+                    <div class="stat-card operational">
+                        <div class="stat-icon">✅</div>
+                        <div class="stat-content">
+                            <div class="stat-value">9,578</div>
+                            <div class="stat-label">Operational</div>
+                            <div class="stat-description">Active and safe</div>
+                        </div>
+                    </div>
+                    <div class="stat-card maintenance">
+                        <div class="stat-icon">🔧</div>
+                        <div class="stat-content">
+                            <div class="stat-value">2,145</div>
+                            <div class="stat-label">Under Maintenance</div>
+                            <div class="stat-description">Currently in progress</div>
+                        </div>
+                    </div>
+                    <div class="stat-card issues">
+                        <div class="stat-icon">⚠️</div>
+                        <div class="stat-content">
+                            <div class="stat-value">1,119</div>
+                            <div class="stat-label">Issues Reported</div>
+                            <div class="stat-description">Requires attention</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="dashboard-grid">
+                    <div class="map-section">
+                        <h3 class="section-heading">Global Network Overview</h3>
+                        <p class="section-desc">Road network status across the world</p>
+                        <div class="map-container">
+                            <canvas id="worldMap"></canvas>
+                            <div class="map-controls">
+                                <button id="zoomIn" class="map-btn">+</button>
+                                <button id="zoomOut" class="map-btn">−</button>
+                                <button id="resetMap" class="map-btn">⊕</button>
+                            </div>
+                            <div class="map-legend">
+                                <div class="legend-item">
+                                    <span class="legend-color operational"></span>
+                                    <span>Operational</span>
+                                </div>
+                                <div class="legend-item">
+                                    <span class="legend-color maintenance"></span>
+                                    <span>Under Maintenance</span>
+                                </div>
+                                <div class="legend-item">
+                                    <span class="legend-color issue"></span>
+                                    <span>Issue Reported</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="routes-section">
+                        <div class="routes-header">
+                            <h3 class="section-heading">Recent Routes</h3>
+                            <a href="#" class="view-all">View All →</a>
+                        </div>
+                        <table class="routes-table">
+                            <thead>
+                                <tr>
+                                    <th>Route Name</th>
+                                    <th>Country / Region</th>
+                                    <th>Status</th>
+                                    <th>Last Updated</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>A1 – Pacific Highway</td>
+                                    <td><span class="flag">🇦🇺</span> Australia</td>
+                                    <td><span class="badge operational">Operational</span></td>
+                                    <td>20 May 2025</td>
+                                    <td><span class="arrow">›</span></td>
+                                </tr>
+                                <tr>
+                                    <td>M1 – Motorway</td>
+                                    <td><span class="flag">🇬🇧</span> United Kingdom</td>
+                                    <td><span class="badge operational">Operational</span></td>
+                                    <td>20 May 2025</td>
+                                    <td><span class="arrow">›</span></td>
+                                </tr>
+                                <tr>
+                                    <td>E75 – Central Motorway</td>
+                                    <td><span class="flag">🇩🇪</span> Germany</td>
+                                    <td><span class="badge maintenance">Under Maintenance</span></td>
+                                    <td>19 May 2025</td>
+                                    <td><span class="arrow">›</span></td>
+                                </tr>
+                                <tr>
+                                    <td>I-95 – Northeast Corridor</td>
+                                    <td><span class="flag">🇺🇸</span> United States</td>
+                                    <td><span class="badge operational">Operational</span></td>
+                                    <td>18 May 2025</td>
+                                    <td><span class="arrow">›</span></td>
+                                </tr>
+                                <tr>
+                                    <td>N1 – National Route</td>
+                                    <td><span class="flag">🇿🇦</span> South Africa</td>
+                                    <td><span class="badge issue">Issue Reported</span></td>
+                                    <td>18 May 2025</td>
+                                    <td><span class="arrow">›</span></td>
+                                </tr>
+                                <tr>
+                                    <td>AH1 – Asian Highway</td>
+                                    <td><span class="flag">🇮🇳</span> India</td>
+                                    <td><span class="badge operational">Operational</span></td>
+                                    <td>17 May 2025</td>
+                                    <td><span class="arrow">›</span></td>
+                                </tr>
+                                <tr>
+                                    <td>BR-116 – Régis Bittencourt</td>
+                                    <td><span class="flag">🇧🇷</span> Brazil</td>
+                                    <td><span class="badge maintenance">Under Maintenance</span></td>
+                                    <td>17 May 2025</td>
+                                    <td><span class="arrow">›</span></td>
+                                </tr>
+                                <tr>
+                                    <td>A6 – Autoroute du Soleil</td>
+                                    <td><span class="flag">🇫🇷</span> France</td>
+                                    <td><span class="badge operational">Operational</span></td>
+                                    <td>16 May 2025</td>
+                                    <td><span class="arrow">›</span></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <div class="bottom-stats-grid">
+                    <div class="bottom-stat-card">
+                        <div class="bottom-stat-icon">🛣️</div>
+                        <div class="bottom-stat-content">
+                            <div class="bottom-stat-value">3,42,187 km</div>
+                            <div class="bottom-stat-label">Total Road Length</div>
+                            <div class="bottom-stat-desc">Across the world</div>
+                        </div>
+                    </div>
+                    <div class="bottom-stat-card">
+                        <div class="bottom-stat-icon">🌍</div>
+                        <div class="bottom-stat-content">
+                            <div class="bottom-stat-value">156</div>
+                            <div class="bottom-stat-label">Countries</div>
+                            <div class="bottom-stat-desc">Covered</div>
+                        </div>
+                    </div>
+                    <div class="bottom-stat-card">
+                        <div class="bottom-stat-icon">📍</div>
+                        <div class="bottom-stat-content">
+                            <div class="bottom-stat-value">428</div>
+                            <div class="bottom-stat-label">Regions</div>
+                            <div class="bottom-stat-desc">Monitored</div>
+                        </div>
+                    </div>
+                    <div class="bottom-stat-card">
+                        <div class="bottom-stat-icon">✓</div>
+                        <div class="bottom-stat-content">
+                            <div class="bottom-stat-value">98.3%</div>
+                            <div class="bottom-stat-label">Network Coverage</div>
+                            <div class="bottom-stat-desc">Operational</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            
+            <section id="routes" class="content-section">
+                <h2 class="section-title">Routes Management</h2>
+                <p>Routes section content goes here...</p>
+            </section>
+            <section id="incidents" class="content-section">
+                <h2 class="section-title">Incidents</h2>
+                <p>Incidents section content goes here...</p>
+            </section>
+            <section id="alerts" class="content-section">
+                <h2 class="section-title">Alerts</h2>
+                <p>Alerts section content goes here...</p>
+            </section>
+            <section id="reports" class="content-section">
+                <h2 class="section-title">Reports</h2>
+                <p>Reports section content goes here...</p>
+            </section>
+            <section id="analytics" class="content-section">
+                <h2 class="section-title">Analytics</h2>
+                <p>Analytics section content goes here...</p>
+            </section>
+        </main>
+    </div>
+    
+    <script src="script.js"></script>
+</body>
+</html>
