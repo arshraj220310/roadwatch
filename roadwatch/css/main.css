@@ -927,6 +927,7 @@ body[data-active-view="assistant"] .command-bar {
   align-items: flex-start;
   gap: 10px;
   flex-wrap: wrap;
+  flex-shrink: 0;
 }
 .routes-panel-head h2 {
   font-size: 0.95rem;
@@ -977,6 +978,7 @@ body[data-active-view="assistant"] .command-bar {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  flex-shrink: 0;
 }
 
 .search-field {
@@ -1124,6 +1126,7 @@ body[data-active-view="assistant"] .command-bar {
   font-size: 0.76rem;
   color: var(--ink-muted);
   background: var(--bg-muted);
+  flex-shrink: 0;
 }
 
 /* ─── Drawer ─── */
@@ -1715,6 +1718,14 @@ body[data-active-view="assistant"] .command-bar {
     overflow-y: auto;
     overflow-x: hidden;
     -webkit-overflow-scrolling: touch;
+    padding-top: var(--topbar-h);
+  }
+  .top-app-bar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 450;
   }
   .app-content {
     overflow: visible;
@@ -1741,11 +1752,14 @@ body[data-active-view="assistant"] .command-bar {
     width: 100%;
     max-height: none;
     flex-shrink: 0;
-    min-height: 280px;
+    height: auto;
+    min-height: auto;
   }
   .routes-list {
-    max-height: 36dvh;
-    min-height: 180px;
+    height: 400px;
+    max-height: 50dvh;
+    min-height: 250px;
+    flex: none;
   }
   .analytics-view { grid-template-columns: 1fr; }
   .chart-wrap-square { max-width: none; }
