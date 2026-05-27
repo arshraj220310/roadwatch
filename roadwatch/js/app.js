@@ -170,6 +170,7 @@ const App = {
   },
 
   init() {
+    this.initLoader();
     this.loadOverrides();
     this.applyAccessibilityFromStorage();
     this.buildRoadIndex();
@@ -185,8 +186,36 @@ const App = {
     this.monitorOnline();
     setTimeout(() => this.initCharts(), 400);
     this.applyUrlState();
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => document.body.classList.add('ui-ready'));
+    document.body.dataset.activeView = 'monitor';
+  },
+
+  initLoader() {
+    const loader = document.getElementById('app-loader');
+    const status = document.getElementById('loader-status');
+    const steps = [
+      { at: 500, text: 'Loading route registry…' },
+      { at: 1200, text: 'Preparing map layers…' },
+      { at: 2000, text: 'Syncing regional analytics…' },
+    ];
+    steps.forEach(s => {
+      setTimeout(() => { if (status) status.textContent = s.text; }, s.at);
+    });
+    setTimeout(() => {
+      loader?.classList.add('loader-done');
+      loader?.setAttribute('aria-busy', 'false');
+      document.body.classList.add('ui-ready');
+      setTimeout(() => {
+        loader?.remove();
+        this.fixMapLayout();
+      }, 520);
+    }, 3000);
+  },
+
+  fixMapLayout() {
+    if (!this.mapInstance) return;
+    this.mapInstance.invalidateSize({ animate: false });
+    [150, 400, 800].forEach(ms => {
+      setTimeout(() => this.mapInstance?.invalidateSize({ animate: false }), ms);
     });
   },
 
@@ -302,13 +331,23 @@ const App = {
     if (elF) { elF.style.width = fp + '%'; }
     if (elP) { elP.style.width = pp + '%'; }
     const leg = document.getElementById('ps-legend');
-    if (leg) leg.textContent = `${gp}% Good · ${fp}% Fair · ${pp}% Poor`;
-    document.getElementById('stat-total').textContent = roads.length.toLocaleString();
-    document.getElementById('stat-miles').textContent = Math.round(totalKm).toLocaleString();
+    if (leg) leg.textContent = `${gp}% Operational · ${fp}% Maintenance · ${pp}% Issues`;
+    const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+    set('stat-total', roads.length.toLocaleString());
+    set('stat-operational', good.toLocaleString());
+    set('stat-maintenance', fair.toLocaleString());
     const complaints = parseInt(localStorage.getItem('rw_complaints') || '0', 10);
-    document.getElementById('stat-complaints').textContent = complaints;
+    set('stat-issues', (poor + complaints).toLocaleString());
+    set('stat-miles', Math.round(totalKm).toLocaleString());
+    set('stat-complaints', complaints);
+    const divisions = new Set(roads.map(r => r.state).filter(Boolean)).size;
+    set('stat-divisions', divisions.toLocaleString());
+    const countryNames = {
+      india: 'India', usa: 'United States', kenya: 'Kenya', uk: 'United Kingdom', australia: 'Australia',
+    };
+    set('stat-countries', countryNames[this.country] || this.country);
     this.pulseStat('stat-total');
-    this.pulseStat('stat-miles');
+    this.pulseStat('stat-operational');
   },
 
   highwayDotIcon(road, selected = false) {
@@ -765,13 +804,17 @@ const App = {
     const panelView = view === 'routes' ? 'monitor' : view;
     document.body.dataset.activeView = view;
     const ctx = document.getElementById('page-context');
-    const labels = {
-      monitor: 'Live map & route registry',
-      routes: 'Browse and filter all corridors',
-      analytics: 'Budget and condition insights',
-      assistant: 'Civic support & reporting',
+    const title = document.getElementById('page-title');
+    const meta = {
+      monitor: { title: 'Dashboard', sub: 'Overview of road network across the world.' },
+      routes: { title: 'Routes', sub: 'Browse and filter all corridors in the active region.' },
+      analytics: { title: 'Analytics', sub: 'Budget, composition, and condition analytics for the active region.' },
+      assistant: { title: 'Alerts & Assistant', sub: 'Civic support, reports, and network guidance.' },
     };
-    if (ctx) ctx.textContent = labels[view] || labels.monitor;
+    const m = meta[view] || meta.monitor;
+    if (ctx) ctx.textContent = m.sub;
+    if (title) title.textContent = m.title;
+    this.closeSidebar();
     document.querySelectorAll('.sidebar-btn[data-view]').forEach(b => {
       b.classList.toggle('active', b.dataset.view === view);
     });
@@ -784,8 +827,8 @@ const App = {
       setTimeout(() => document.getElementById('road-search')?.focus(), 100);
     }
     if (view === 'analytics') setTimeout(() => this.initCharts(), 100);
-    if (panelView === 'monitor' && this.mapInstance) {
-      setTimeout(() => this.mapInstance.invalidateSize(), 150);
+    if (panelView === 'monitor') {
+      setTimeout(() => this.fixMapLayout(), 80);
     }
     this.updateUrlState();
   },
@@ -813,8 +856,9 @@ const App = {
   initCharts() {
     const roads = this.getRoads().map(r => this.withOverrides(r));
     if (!document.getElementById('budget-chart')) return;
-    Chart.defaults.color = '#64748b';
-    Chart.defaults.font.family = 'DM Sans';
+    Chart.defaults.color = '#94a3b8';
+    Chart.defaults.font.family = "'Source Sans 3', sans-serif";
+    Chart.defaults.borderColor = '#252b38';
 
     const top8 = [...roads].sort((a, b) => b.amount_sanctioned - a.amount_sanctioned).slice(0, 8);
     const bCtx = document.getElementById('budget-chart').getContext('2d');
@@ -824,11 +868,19 @@ const App = {
       data: {
         labels: top8.map(r => this.routeDisplayId(r)),
         datasets: [
-          { label: 'Sanctioned', data: top8.map(r => r.amount_sanctioned / 1e7), backgroundColor: '#0d9488' },
-          { label: 'Spent', data: top8.map(r => r.amount_spent / 1e7), backgroundColor: '#5eead4' },
+          { label: 'Sanctioned', data: top8.map(r => r.amount_sanctioned / 1e7), backgroundColor: '#7b5cff' },
+          { label: 'Spent', data: top8.map(r => r.amount_spent / 1e7), backgroundColor: '#38bdf8' },
         ],
       },
-      options: { responsive: true, plugins: { legend: { position: 'top' } }, scales: { y: { ticks: { callback: v => '₹' + v + ' Cr' } } } },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: { legend: { position: 'top', labels: { boxWidth: 12, padding: 12 } } },
+        scales: {
+          x: { grid: { color: '#252b38' } },
+          y: { grid: { color: '#252b38' }, ticks: { callback: v => '₹' + v + ' Cr' } },
+        },
+      },
     });
 
     const typeCounts = {};
@@ -837,8 +889,8 @@ const App = {
     if (this.charts.type) this.charts.type.destroy();
     this.charts.type = new Chart(tCtx, {
       type: 'doughnut',
-      data: { labels: Object.keys(typeCounts), datasets: [{ data: Object.values(typeCounts), backgroundColor: ['#0d9488', '#7c3aed', '#d97706', '#059669'], borderWidth: 0 }] },
-      options: { responsive: true, plugins: { legend: { position: 'bottom' } } },
+      data: { labels: Object.keys(typeCounts), datasets: [{ data: Object.values(typeCounts), backgroundColor: ['#7b5cff', '#8b5cf6', '#f97316', '#22c55e'], borderWidth: 0 }] },
+      options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, padding: 14 } } } },
     });
 
     const qBuckets = { Good: 0, Fair: 0, Poor: 0 };
@@ -854,7 +906,7 @@ const App = {
         labels: ['Good', 'Fair', 'Poor'],
         datasets: [{ data: [qBuckets.Good, qBuckets.Fair, qBuckets.Poor], backgroundColor: ['#059669', '#d97706', '#dc2626'], borderWidth: 0 }],
       },
-      options: { responsive: true, plugins: { legend: { position: 'bottom' } } },
+      options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, padding: 14 } } } },
     });
 
     const top6 = [...roads].sort((a, b) => b.pothole_reports - a.pothole_reports).slice(0, 6);
@@ -864,9 +916,9 @@ const App = {
       type: 'bar',
       data: {
         labels: top6.map(r => this.routeDisplayId(r)),
-        datasets: [{ label: 'Reports', data: top6.map(r => r.pothole_reports), backgroundColor: '#ea580c' }],
+        datasets: [{ label: 'Reports', data: top6.map(r => r.pothole_reports), backgroundColor: '#ef4444' }],
       },
-      options: { indexAxis: 'y', responsive: true, plugins: { legend: { display: false } } },
+      options: { indexAxis: 'y', responsive: true, maintainAspectRatio: true, plugins: { legend: { display: false } } },
     });
   },
 
@@ -1233,9 +1285,7 @@ const App = {
     const modal = document.getElementById('settings-modal');
     if (!modal) return;
     const contrast = document.getElementById('toggle-contrast');
-    const motion = document.getElementById('toggle-motion');
     if (contrast) contrast.checked = document.body.classList.contains('hc');
-    if (motion) motion.checked = document.body.classList.contains('rm');
     modal.classList.add('active');
   },
 
@@ -1245,9 +1295,26 @@ const App = {
 
   applyAccessibilityFromStorage() {
     const hc = localStorage.getItem('rw_hc') === '1';
-    const rm = localStorage.getItem('rw_rm') === '1';
     document.body.classList.toggle('hc', hc);
-    document.body.classList.toggle('rm', rm);
+    document.body.classList.remove('rm');
+  },
+
+  openSidebar() {
+    document.getElementById('sidebar')?.classList.add('open');
+    document.getElementById('sidebar-backdrop')?.classList.add('open');
+    document.getElementById('sidebar-backdrop')?.setAttribute('aria-hidden', 'false');
+  },
+
+  closeSidebar() {
+    document.getElementById('sidebar')?.classList.remove('open');
+    document.getElementById('sidebar-backdrop')?.classList.remove('open');
+    document.getElementById('sidebar-backdrop')?.setAttribute('aria-hidden', 'true');
+  },
+
+  toggleSidebar() {
+    const sb = document.getElementById('sidebar');
+    if (sb?.classList.contains('open')) this.closeSidebar();
+    else this.openSidebar();
   },
 
   exportCsv() {
@@ -1392,11 +1459,15 @@ const App = {
       document.body.classList.toggle('hc', on);
       localStorage.setItem('rw_hc', on ? '1' : '0');
     });
-    document.getElementById('toggle-motion')?.addEventListener('change', e => {
-      const on = !!e.target.checked;
-      document.body.classList.toggle('rm', on);
-      localStorage.setItem('rw_rm', on ? '1' : '0');
+
+    document.getElementById('btn-menu-toggle')?.addEventListener('click', () => this.toggleSidebar());
+    document.getElementById('sidebar-backdrop')?.addEventListener('click', () => this.closeSidebar());
+    document.getElementById('btn-header-export')?.addEventListener('click', () => this.exportCsv());
+    document.getElementById('btn-header-locate')?.addEventListener('click', () => this.locateUser());
+    document.querySelectorAll('.sidebar-brand, .top-brand').forEach(el => {
+      el.addEventListener('click', e => { e.preventDefault(); this.switchView('monitor'); this.closeSidebar(); });
     });
+    document.getElementById('btn-view-all-routes')?.addEventListener('click', () => this.switchView('routes'));
 
     document.getElementById('btn-nearby')?.addEventListener('click', () => {
       if (this.userLat == null || this.userLng == null) {
@@ -1496,11 +1567,23 @@ const App = {
       }
     });
 
+    let resizeTimer;
+    const onLayoutChange = () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {
+        this.fixMapLayout();
+        Object.values(this.charts).forEach(c => c?.resize?.());
+      }, 120);
+    };
+    window.addEventListener('resize', onLayoutChange);
+    window.addEventListener('orientationchange', () => setTimeout(() => this.fixMapLayout(), 350));
+
     // Keyboard shortcuts
     document.addEventListener('keydown', e => {
       if (e.key === 'Escape') {
         this.closeDrawer();
         this.closeSettings();
+        this.closeSidebar();
         document.getElementById('complaint-modal')?.classList.remove('active');
         document.getElementById('filter-dropdown')?.classList.remove('open');
         document.getElementById('btn-map-filter')?.classList.remove('active');

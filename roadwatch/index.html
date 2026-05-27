@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>RoadWatch — Infrastructure Intelligence</title>
+  <title>RoadWatch — Monitoring. Insights. Safer Networks.</title>
   <meta name="description" content="RoadWatch: Monitor road assets, pavement condition, and civic reports across national networks."/>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700&family=Source+Sans+3:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet"/>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"/>
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"/>
@@ -16,28 +16,43 @@
 </head>
 <body class="dashboard-body">
 
+<div class="app-loader" id="app-loader" aria-live="polite" aria-busy="true">
+  <div class="loader-bg" aria-hidden="true"></div>
+  <div class="loader-content">
+    <img src="logo.png" alt="RoadWatch" class="loader-logo" width="200" height="auto"/>
+    <p class="loader-tagline">Monitoring. Insights. Safer Networks.</p>
+    <div class="loader-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+      <div class="loader-progress" id="loader-progress"></div>
+    </div>
+    <p class="loader-status" id="loader-status">Initializing network data…</p>
+  </div>
+</div>
+
+<div class="bg-layer" aria-hidden="true">
+  <div class="bg-slide bg-slide-1"></div>
+  <div class="bg-slide bg-slide-2"></div>
+  <div class="bg-slide bg-slide-3"></div>
+</div>
+
+<div class="sidebar-backdrop" id="sidebar-backdrop" aria-hidden="true"></div>
+
 <div class="app-shell">
   <aside class="sidebar nav-rail" id="sidebar" aria-label="Main navigation">
-    <div class="nav-brand">
-      <div class="nav-brand-mark"><i class="fa-solid fa-road" aria-hidden="true"></i></div>
-      <div class="nav-brand-text">
-        <span class="nav-brand-name">RoadWatch</span>
-        <span class="nav-brand-tag">Infrastructure OS</span>
-      </div>
-    </div>
-
+    <a class="sidebar-brand" href="#" aria-label="RoadWatch home">
+      <img src="logo.png" alt="" class="sidebar-brand-logo" width="140" height="auto"/>
+    </a>
     <nav class="sidebar-nav nav-menu">
       <button class="sidebar-btn nav-item active" data-view="monitor" type="button">
-        <i class="fa-solid fa-map-location-dot"></i>
-        <span>Live map</span>
+        <i class="fa-solid fa-gauge-high"></i>
+        <span>Dashboard</span>
       </button>
       <button class="sidebar-btn nav-item" data-view="routes" type="button">
         <i class="fa-solid fa-route"></i>
-        <span>Route registry</span>
+        <span>Routes</span>
       </button>
       <button class="sidebar-btn nav-item" data-view="analytics" type="button">
-        <i class="fa-solid fa-chart-pie"></i>
-        <span>Insights</span>
+        <i class="fa-solid fa-chart-line"></i>
+        <span>Analytics</span>
       </button>
       <button class="sidebar-btn nav-item" data-view="assistant" type="button">
         <i class="fa-solid fa-comments"></i>
@@ -51,54 +66,124 @@
         <span>Locate me</span>
       </button>
       <button class="sidebar-btn nav-tool" id="btn-settings" type="button" title="Settings">
-        <i class="fa-solid fa-sliders"></i>
+        <i class="fa-solid fa-gear"></i>
         <span>Settings</span>
       </button>
+      <span class="sidebar-version">v 1.0.0</span>
     </div>
   </aside>
 
   <div class="workspace app-main">
-    <header class="top-bar command-bar">
-      <div class="command-bar-top">
-        <div class="command-title">
-          <h1 class="page-title">Network overview</h1>
-          <p class="page-subtitle" id="page-context">Real-time asset monitoring</p>
+    <header class="top-app-bar">
+      <button class="menu-toggle" id="btn-menu-toggle" type="button" aria-label="Open menu">
+        <i class="fa-solid fa-bars"></i>
+      </button>
+      <a class="top-brand" href="#" aria-label="RoadWatch">
+        <img src="logo.png" alt="" class="top-brand-logo" width="120" height="auto"/>
+        <div class="top-brand-text">
+          <span class="top-brand-tag">Monitoring. Insights. Safer Networks.</span>
         </div>
-        <div class="top-filters command-filters">
-          <label class="filter-label">
-            <span>Region</span>
-            <select class="filter-select" id="country-selector" aria-label="Region">
-              <option value="india">India</option>
-              <option value="usa">United States</option>
-              <option value="kenya">Kenya</option>
-              <option value="uk">United Kingdom</option>
-              <option value="australia">Australia</option>
-            </select>
-          </label>
-          <label class="filter-label">
-            <span>Division</span>
-            <select class="filter-select" id="state-filter" aria-label="Division">
-              <option value="">All divisions</option>
-            </select>
-          </label>
+      </a>
+      <div class="top-app-actions">
+        <span class="live-badge" title="Live monitoring active">
+          <span class="live-badge-dot"></span>
+          Live
+        </span>
+        <button class="top-icon-btn" id="btn-header-locate" type="button" title="My location" aria-label="My location">
+          <i class="fa-solid fa-location-crosshairs"></i>
+        </button>
+      </div>
+    </header>
+
+    <header class="page-header command-bar">
+      <div class="page-header-row">
+        <div class="command-title">
+          <h1 class="page-title" id="page-title">Dashboard</h1>
+          <p class="page-subtitle" id="page-context">Overview of road network across the world.</p>
+        </div>
+        <div class="page-header-actions">
+          <div class="top-filters command-filters">
+            <label class="filter-label filter-label-inline">
+              <select class="filter-select" id="country-selector" aria-label="Region">
+                <option value="india">India</option>
+                <option value="usa">United States</option>
+                <option value="kenya">Kenya</option>
+                <option value="uk">United Kingdom</option>
+                <option value="australia">Australia</option>
+              </select>
+            </label>
+            <label class="filter-label filter-label-inline">
+              <select class="filter-select" id="state-filter" aria-label="Division">
+                <option value="">All divisions</option>
+              </select>
+            </label>
+          </div>
+          <button class="btn btn-export" id="btn-header-export" type="button">
+            <i class="fa-solid fa-download"></i>
+            <span>Export Report</span>
+          </button>
         </div>
       </div>
 
-      <div class="command-bar-metrics">
-        <div class="kpi-card">
-          <span class="kpi-label">Assets</span>
-          <span class="top-stat-val kpi-value" id="stat-total">—</span>
+      <div class="summary-cards" id="summary-cards">
+        <div class="summary-card sc-blue">
+          <div class="summary-card-icon"><i class="fa-solid fa-road"></i></div>
+          <div class="summary-card-body">
+            <span class="summary-card-value" id="stat-total">—</span>
+            <span class="summary-card-label">Total Routes</span>
+            <span class="summary-card-hint">Active network assets</span>
+          </div>
         </div>
-        <div class="kpi-card">
-          <span class="kpi-label">Network km</span>
-          <span class="top-stat-val kpi-value" id="stat-miles">—</span>
+        <div class="summary-card sc-green">
+          <div class="summary-card-icon"><i class="fa-solid fa-circle-check"></i></div>
+          <div class="summary-card-body">
+            <span class="summary-card-value" id="stat-operational">—</span>
+            <span class="summary-card-label">Operational</span>
+            <span class="summary-card-hint">Good condition corridors</span>
+          </div>
         </div>
-        <div class="kpi-card kpi-alert">
-          <span class="kpi-label">Citizen reports</span>
-          <span class="top-stat-val kpi-value stat-red" id="stat-complaints">0</span>
+        <div class="summary-card sc-orange">
+          <div class="summary-card-icon"><i class="fa-solid fa-wrench"></i></div>
+          <div class="summary-card-body">
+            <span class="summary-card-value" id="stat-maintenance">—</span>
+            <span class="summary-card-label">Under Maintenance</span>
+            <span class="summary-card-hint">Fair condition — scheduled work</span>
+          </div>
+        </div>
+        <div class="summary-card sc-red">
+          <div class="summary-card-icon"><i class="fa-solid fa-triangle-exclamation"></i></div>
+          <div class="summary-card-body">
+            <span class="summary-card-value" id="stat-issues">—</span>
+            <span class="summary-card-label">Issues Reported</span>
+            <span class="summary-card-hint" id="stat-issues-hint">Poor condition &amp; citizen reports</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="metrics-secondary" id="metrics-secondary">
+        <div class="metric-mini">
+          <i class="fa-solid fa-ruler-horizontal"></i>
+          <div>
+            <span class="metric-mini-val" id="stat-miles">—</span>
+            <span class="metric-mini-label">Total road length (km)</span>
+          </div>
+        </div>
+        <div class="metric-mini">
+          <i class="fa-solid fa-globe"></i>
+          <div>
+            <span class="metric-mini-val" id="stat-countries">1</span>
+            <span class="metric-mini-label">Region selected</span>
+          </div>
+        </div>
+        <div class="metric-mini">
+          <i class="fa-solid fa-map"></i>
+          <div>
+            <span class="metric-mini-val" id="stat-divisions">—</span>
+            <span class="metric-mini-label">Divisions monitored</span>
+          </div>
         </div>
         <div class="pavement-summary kpi-pavement" id="pavement-summary">
-          <span class="ps-label">Pavement mix</span>
+          <span class="ps-label">Network coverage</span>
           <div class="ps-bar" id="ps-bar">
             <span class="ps-seg ps-good" id="ps-good" style="width:0%"></span>
             <span class="ps-seg ps-fair" id="ps-fair" style="width:0%"></span>
@@ -155,9 +240,9 @@
 
             <div class="map-overlay map-legend">
               <div class="map-legend-title">Condition</div>
-              <div class="legend-row"><span class="legend-dot lg-good"></span> Good</div>
-              <div class="legend-row"><span class="legend-dot lg-fair"></span> Fair</div>
-              <div class="legend-row"><span class="legend-dot lg-poor"></span> Poor</div>
+              <div class="legend-row"><span class="legend-dot lg-good"></span> Operational</div>
+              <div class="legend-row"><span class="legend-dot lg-fair"></span> Under maintenance</div>
+              <div class="legend-row"><span class="legend-dot lg-poor"></span> Issue reported</div>
               <div class="map-marker-count" id="map-marker-count">—</div>
             </div>
 
@@ -173,10 +258,11 @@
           <aside class="routes-panel route-deck">
             <div class="routes-panel-head">
               <div class="routes-panel-title">
-                <h2>Route registry</h2>
+                <h2>Recent Routes</h2>
                 <div class="roads-subhead" id="roads-subhead">All road types</div>
               </div>
               <div class="routes-head-actions">
+                <button class="text-link-btn" id="btn-view-all-routes" type="button">View All</button>
                 <button class="icon-btn" id="btn-nearby" type="button" title="Sort by distance">
                   <i class="fa-solid fa-location-dot"></i>
                 </button>
@@ -209,26 +295,22 @@
 
       <div class="view-panel" id="view-analytics">
         <div class="analytics-page">
-          <header class="section-header">
-            <h2>Network insights</h2>
-            <p>Budget, composition, and condition analytics for the active region.</p>
-          </header>
           <div class="analytics-view" id="analytics-grid">
             <div class="analytics-card full-width">
               <h3><i class="fa-solid fa-chart-column"></i> Budget — sanctioned vs spent</h3>
-              <canvas id="budget-chart" height="120"></canvas>
+              <div class="chart-wrap"><canvas id="budget-chart"></canvas></div>
             </div>
             <div class="analytics-card">
               <h3><i class="fa-solid fa-layer-group"></i> Asset types</h3>
-              <canvas id="type-chart" height="160"></canvas>
+              <div class="chart-wrap chart-wrap-square"><canvas id="type-chart"></canvas></div>
             </div>
             <div class="analytics-card">
               <h3><i class="fa-solid fa-gauge-high"></i> Condition split</h3>
-              <canvas id="quality-chart" height="160"></canvas>
+              <div class="chart-wrap chart-wrap-square"><canvas id="quality-chart"></canvas></div>
             </div>
             <div class="analytics-card full-width">
               <h3><i class="fa-solid fa-triangle-exclamation"></i> Most reported corridors</h3>
-              <canvas id="pothole-chart" height="90"></canvas>
+              <div class="chart-wrap chart-wrap-short"><canvas id="pothole-chart"></canvas></div>
             </div>
           </div>
         </div>
@@ -237,7 +319,7 @@
       <div class="view-panel" id="view-assistant">
         <section class="chat-panel chat-panel-full">
           <div class="chat-header">
-            <div class="chat-header-icon"><i class="fa-solid fa-sparkles"></i></div>
+            <div class="chat-header-icon"><i class="fa-solid fa-comments"></i></div>
             <div class="chat-header-info">
               <h3>RoadWatch Assistant</h3>
               <span class="status-online"><span class="pulse-dot"></span> Ready to help</span>
@@ -275,6 +357,8 @@
       <span id="location-text">Detecting location…</span>
       <span class="status-sep">·</span>
       <span id="db-status">Storage: loading…</span>
+      <span class="status-sep hide-mobile">·</span>
+      <span class="hide-mobile" id="stat-complaints-wrap">Citizen reports: <strong id="stat-complaints">0</strong></span>
     </footer>
   </div>
 </div>
@@ -365,12 +449,6 @@
       <label class="pref-row">
         <span class="form-label">High contrast</span>
         <input type="checkbox" id="toggle-contrast"/>
-      </label>
-    </div>
-    <div class="form-group">
-      <label class="pref-row">
-        <span class="form-label">Reduced motion</span>
-        <input type="checkbox" id="toggle-motion"/>
       </label>
     </div>
     <p class="roads-subhead pref-hint">Shortcuts: Alt+L locate · Alt+E export · Alt+S share</p>
